@@ -21,7 +21,7 @@ def generate_hypotheses(
     set than a holdout set.
 
     :param connection: A SQLite connection.
-    :param relation: The name of a table.
+    :param table: The name of a table.
     :param group_bys: A list of columns to group on.
     :param aggregate: An aggregate on which we identify an outlier.
     :param outlier_predicates: Filters on the result that
