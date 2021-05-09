@@ -10,7 +10,10 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['Click>=7.0', ]
+requirements = [
+    'Click>=7.0',
+    'dataclasses==0.8',  # Python 3.6 backward compatibility
+]
 
 setup_requirements = ['pytest-runner', ]
 
