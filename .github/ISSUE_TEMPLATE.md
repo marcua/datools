@@ -1,4 +1,4 @@
-* Data tools version:
+* datools version:
 * Python version:
 * Operating System:
 
