@@ -12,7 +12,7 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'Click>=7.0',
-    'dataclasses==0.8',  # Python 3.6 backward compatibility
+    'dataclasses==0.8; python_version<"3.7"',
 ]
 
 setup_requirements = ['pytest-runner', ]
