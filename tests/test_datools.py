@@ -6,7 +6,6 @@ import pytest
 
 from click.testing import CliRunner
 
-from datools import datools
 from datools import cli
 
 
