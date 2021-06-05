@@ -7,13 +7,15 @@ from datools.models import Operator
 from datools.models import Predicate
 from datools.models import StringConstant
 from datools.models import Table
-from datools.scorpion.hypotheses import generate_hypotheses
+from datools.scorpion.explanations import generate_explanations
+from .fixtures import generate_testdb
 
 
 def test_scorpion():
+    engine = generate_testdb()
     assert(
-        generate_hypotheses(
-            None,
+        generate_explanations(
+            engine,
             Table('table'),
             (Column('group'), ),
             (Aggregate(AggregateFunction.AVERAGE, Column('agg')), ),

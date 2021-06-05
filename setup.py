@@ -13,6 +13,7 @@ with open('HISTORY.rst') as history_file:
 requirements = [
     'Click>=7.0',
     'dataclasses==0.8; python_version<"3.7"',
+    'sqlalchemy==1.4.17'
 ]
 
 setup_requirements = ['pytest-runner', ]
