@@ -1,5 +1,7 @@
 from typing import Tuple
 
+from sqlalchemy.engine import Engine
+
 from datools.models import Aggregate
 from datools.models import Column
 from datools.models import Operator
@@ -8,15 +10,15 @@ from datools.models import StringConstant
 from datools.models import Table
 
 
-def generate_hypotheses(
-        connection,
+def generate_explanations(
+        engine: Engine,
         table: Table,
         group_bys: Tuple[Column, ...],
         aggregate: Tuple[Aggregate, ...],
         outlier_predicates: Tuple[Predicate, ...],
         holdout_predicates: Tuple[Predicate, ...]
 ) -> Tuple[Predicate, ...]:
-    """Generates hypothesis predicates based on Scorpion (Wu & Madden,
+    """Generates explanation predicates based on Scorpion (Wu & Madden,
     VLDB 2013) that cause an aggregate to be different in an outlier
     set than a holdout set.
 
