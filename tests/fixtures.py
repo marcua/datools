@@ -50,4 +50,3 @@ def generate_testdb() -> Engine:
         for (created_at, sensor_id, voltage, humidity, temperature) in values
     ])
     return engine
-    
