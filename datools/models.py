@@ -16,6 +16,12 @@ Operator = Enum(
 class Column:
     name: str
 
+    def __hash__(self):
+        return self.name.__hash__()
+
+    def __eq__(self, other):
+        return self.name.__eq__(other.name)
+
 
 @dataclass
 class StringConstant:

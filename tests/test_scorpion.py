@@ -8,17 +8,17 @@ from datools.models import Predicate
 from datools.models import StringConstant
 from datools.models import Table
 from datools.scorpion.explanations import generate_explanations
-from .fixtures import generate_testdb
+from .fixtures import generate_scorpion_testdb
 
 
 def test_scorpion():
-    engine = generate_testdb()
+    engine = generate_scorpion_testdb()
     assert(
         generate_explanations(
             engine,
-            Table('table'),
+            Table('sensor_readings'),
             (Column('group'), ),
-            (Aggregate(AggregateFunction.AVERAGE, Column('agg')), ),
+            Aggregate(AggregateFunction.AVERAGE, Column('agg')),
             (Predicate(Column('filter'),
                        Operator.EQUALS,
                        StringConstant('one')), ),
