@@ -1,6 +1,8 @@
-from typing import Tuple
+import sqlalchemy
 
-from sqlalchemy.engine import Engine
+from typing import Generator
+from typing import Set
+from typing import Tuple
 
 from datools.models import Aggregate
 from datools.models import Column
@@ -8,13 +10,31 @@ from datools.models import Operator
 from datools.models import Predicate
 from datools.models import StringConstant
 from datools.models import Table
+from datools.table_statistics import column_statistics
+
+
+def _single_column_candidate_predicates(
+        engine: sqlalchemy.engine.Engine,
+        table: Table,
+        group_bys: Tuple[Column, ...],
+        aggregate: Aggregate,
+) -> Generator[Predicate, None, None]:
+    columns_to_ignore: Set[Column] = {group_by for group_by in group_bys}
+    columns_to_ignore.add(aggregate.column)
+    statistics = column_statistics(engine, table, columns_to_ignore)
+    print(statistics)
+    # For each column and statistic type,
+    # * Decide whether to permit that column/statistic type (e.g., prune
+    #   high cardinality)
+    # * Generate column names and predicates (SingleColumnPredicate(Column,
+    #   Predicate)).
 
 
 def generate_explanations(
-        engine: Engine,
+        engine: sqlalchemy.engine.Engine,
         table: Table,
         group_bys: Tuple[Column, ...],
-        aggregate: Tuple[Aggregate, ...],
+        aggregate: Aggregate,
         outlier_predicates: Tuple[Predicate, ...],
         holdout_predicates: Tuple[Predicate, ...]
 ) -> Tuple[Predicate, ...]:
@@ -31,6 +51,8 @@ def generate_explanations(
     :param holdout_predicates: Filters on the result that
         exhibit normal conditions.
     """
+    _single_column_candidate_predicates(
+        engine, table, group_bys, aggregate)
     return (
         Predicate(
             Column('foo'),
