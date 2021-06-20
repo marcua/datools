@@ -11,7 +11,7 @@ from sqlalchemy.schema import Column
 from sqlalchemy.schema import Table
 
 
-def generate_testdb() -> Engine:
+def generate_scorpion_testdb() -> Engine:
     """Create a test DB from Table 1 of the Scorpion paper.
 
     Rather than make sensor_id a foreign key, we make it a character
@@ -42,11 +42,66 @@ def generate_testdb() -> Engine:
         (datetime(2021, 5, 5, 13), '3', 2.3, 0.5, 80),
     ]
     conn.execute(sensor_readings.insert(), [
-        {'created_at': created_at,
-         'sensor_id': sensor_id,
-         'voltage': voltage,
-         'humidity': humidity,
-         'temperature': temperature}
-        for (created_at, sensor_id, voltage, humidity, temperature) in values
+        dict(zip(
+            ('created_at', 'sensor_id', 'voltage', 'humidity', 'temperature'),
+            value))
+        for value in values
+    ])
+    return engine
+
+
+def generate_synthetic_testdb() -> Engine:
+    """Create a synthetic database with several data types and
+    distributions.
+    For various data types (datetime, integer, string, float), we
+    generate distributions that are:
+    * Unique overall (every value is different)
+    * The same overall (every value is the same)
+    * Unique within a bucket (but repeats across buckets).
+    """
+    engine = create_engine('sqlite://')
+    conn = engine.connect()
+    metadata = MetaData()
+    sensor_readings = Table(
+        'synthetic_data', metadata,
+        Column('id', Integer, primary_key=True),
+        Column('same_datetime', DateTime, nullable=False),
+        Column('unique_datetime', DateTime, nullable=False),
+        Column('bucket_unique_datetime', DateTime, nullable=False),
+        Column('same_string', String, nullable=False),
+        Column('unique_string', String, nullable=False),
+        Column('bucket_unique_string', String, nullable=False),
+        Column('same_float', Float, nullable=False),
+        Column('unique_float', Float, nullable=False),
+        Column('bucket_unique_float', Float, nullable=False),
+        Column('same_int', Integer, nullable=False),
+        Column('unique_int', Integer, nullable=False),
+        Column('bucket_unique_int', Integer, nullable=False),
+    )
+    metadata.create_all(engine)
+    values = []
+    for bucket in range(1, 20):
+        for row in range(1, 10):
+            values.append((
+                datetime(2021, 5, 5, 11),
+                datetime(2021, 5, bucket, row),
+                datetime(2021, 5, 5, row),
+                'hi',
+                f'{bucket}-{row}',
+                f'{row}',
+                1.1,
+                bucket * 1.0 + (row / 100.0),
+                row * 1.0,
+                1,
+                bucket * 1000 + row,
+                row
+            ))
+    conn.execute(sensor_readings.insert(), [
+        dict(zip(
+            ('same_datetime', 'unique_datetime', 'bucket_unique_datetime',
+             'same_string', 'unique_string', 'bucket_unique_string',
+             'same_float', 'unique_float', 'bucket_unique_float',
+             'same_int', 'unique_int', 'bucket_unique_int'), value))
+        for value in values
     ])
     return engine
