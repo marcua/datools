@@ -5,7 +5,7 @@ from datools.models import AggregateFunction
 from datools.models import Column
 from datools.models import Operator
 from datools.models import Predicate
-from datools.models import StringConstant
+from datools.models import Constant
 from datools.models import Table
 from datools.scorpion.explanations import generate_explanations
 from .fixtures import generate_scorpion_testdb
@@ -21,12 +21,12 @@ def test_scorpion():
             Aggregate(AggregateFunction.AVERAGE, Column('agg')),
             (Predicate(Column('filter'),
                        Operator.EQUALS,
-                       StringConstant('one')), ),
+                       Constant('one')), ),
             (Predicate(Column('filter'),
                        Operator.NOT_EQUALS,
-                       StringConstant('one')), ))
+                       Constant('one')), ))
         ) == (
             Predicate(
                 Column('foo'),
                 Operator.EQUALS,
-                StringConstant('bar')),)
+                Constant('bar')),)
