@@ -1,23 +1,67 @@
-from typing import Tuple
+import sqlalchemy
 
-from sqlalchemy.engine import Engine
+from typing import Generator
+from typing import Set
+from typing import Tuple
 
 from datools.models import Aggregate
 from datools.models import Column
+from datools.models import Constant
 from datools.models import Operator
 from datools.models import Predicate
-from datools.models import StringConstant
 from datools.models import Table
+from datools.table_statistics import column_statistics
+from datools.table_statistics import RangeValuedStatistics
+from datools.table_statistics import SetValuedStatistics
+
+
+def _single_column_candidate_predicates(
+        engine: sqlalchemy.engine.Engine,
+        table: Table,
+        group_bys: Tuple[Column, ...],
+        aggregate: Aggregate,
+) -> Generator[Tuple[Predicate, ...], None, None]:
+    """Based on column statistics for range- and set-valued columns,
+    returns a list of predicates that either filter on ranges (i.e.,
+    lower <= column AND column < higher) or equality (i.e., column =
+    constant). These candidates can be tested as outlier explanations.
+
+    :returns: A tuple representing a conjunction of
+              predicates (e.g., predicate1 AND predicate2).
+    """
+    columns_to_ignore: Set[Column] = {group_by for group_by in group_bys}
+    columns_to_ignore.add(aggregate.column)
+    statistics = column_statistics(engine, table, columns_to_ignore)
+    for column, statistics_list in statistics.items():
+        for statistic in statistics_list:
+            if isinstance(statistic, SetValuedStatistics):
+                yield from (Predicate(
+                    column,
+                    Operator.EQUALS,
+                    Constant(value)) for value in statistic.popular_values)
+            elif isinstance(statistic, RangeValuedStatistics):
+                if len(statistic.bucket_minimums) == 1:
+                    continue
+                pairs = zip(statistic.bucket_minimums,
+                            statistic.bucket_minimums[1:] + [None])
+                for first, second in pairs:
+                    first_predicate = Predicate(
+                        column, Operator.GTEQ, Constant(first))
+                    if second is None:
+                        yield (first_predicate, )
+                    yield (
+                        first_predicate,
+                        Predicate(column, Operator.LT, Constant(second)))
 
 
 def generate_explanations(
-        engine: Engine,
+        engine: sqlalchemy.engine.Engine,
         table: Table,
         group_bys: Tuple[Column, ...],
-        aggregate: Tuple[Aggregate, ...],
+        aggregate: Aggregate,
         outlier_predicates: Tuple[Predicate, ...],
         holdout_predicates: Tuple[Predicate, ...]
-) -> Tuple[Predicate, ...]:
+) -> Tuple[Tuple[Predicate, ...]]:
     """Generates explanation predicates based on Scorpion (Wu & Madden,
     VLDB 2013) that cause an aggregate to be different in an outlier
     set than a holdout set.
@@ -31,8 +75,6 @@ def generate_explanations(
     :param holdout_predicates: Filters on the result that
         exhibit normal conditions.
     """
-    return (
-        Predicate(
-            Column('foo'),
-            Operator.EQUALS,
-            StringConstant('bar')),)
+    candidates = _single_column_candidate_predicates(
+        engine, table, group_bys, aggregate)
+    return tuple(candidates)

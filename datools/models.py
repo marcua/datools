@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 
 AggregateFunction = Enum(
@@ -9,7 +10,7 @@ AggregateFunction = Enum(
 
 Operator = Enum(
     'Operator',
-    'EQUALS NOT_EQUALS')
+    'EQUALS NOT_EQUALS GT LT GTEQ LTEQ')
 
 
 @dataclass
@@ -24,8 +25,8 @@ class Column:
 
 
 @dataclass
-class StringConstant:
-    value: str
+class Constant:
+    value: Any
 
 
 @dataclass
@@ -38,7 +39,7 @@ class Aggregate:
 class Predicate:
     left: Column
     operator: Operator
-    right: StringConstant  # TODO(marcua): get fancier.
+    right: Constant
 
 
 @dataclass

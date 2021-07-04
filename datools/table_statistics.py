@@ -13,6 +13,7 @@ from datools.models import Column
 from datools.models import Table
 
 
+MAX_SET_VALUES_TO_INCLUDE = 100
 RANGE_BUCKETS = 3
 RANGE_VALUED_TYPES = {
     sqlalchemy.sql.sqltypes.BIGINT,
@@ -46,9 +47,16 @@ class ColumnStatistics:
 @dataclass
 class SetValuedStatistics(ColumnStatistics):
     distinct_values: int
+    popular_values: list
 
     def __repr__(self):
-        return f'SetValuedStatistics(distinct_values: {self.distinct_values})'
+        return (
+            f'SetValuedStatistics(distinct_values: {self.distinct_values}, '
+            f'popular_values: {self.popular_values})')
+
+    def __eq__(self, other):
+        return (self.distinct_values == other.distinct_values
+                and set(self.popular_values) == set(other.popular_values))
 
 
 @dataclass
@@ -74,10 +82,19 @@ def _set_valued_statistics(
     results = list(conn.execute(
         f'SELECT {", ".join(clauses)} FROM {table.name}'))[0]
     for column in columns:
+        values = [
+            row[column.name] for row in
+            conn.execute(
+                f'SELECT {column.name}, COUNT(*) AS num_rows '
+                f'FROM {table.name} '
+                f'GROUP BY {column.name} '
+                f'ORDER BY num_rows DESC, {column.name} '
+                f'LIMIT {MAX_SET_VALUES_TO_INCLUDE}')]
         yield (
             column,
-            SetValuedStatistics(results[
-                f'{column.name}_distinct_values']))
+            SetValuedStatistics(
+                results[f'{column.name}_distinct_values'],
+                values))
 
 
 def _range_valued_statistics(
@@ -125,13 +142,13 @@ def _range_valued_statistics(
 def column_statistics(
         engine: sqlalchemy.engine.Engine,
         table: Table,
-        columns_to_ignore: Set[Column],
+        columns_to_ignore: Set[Column]
 ) -> Dict[Column, List[ColumnStatistics]]:
     metadata = sqlalchemy.MetaData()
     table_metadata = sqlalchemy.Table(
         table.name, metadata, autoload_with=engine)
     candidate_columns = [column for column in table_metadata.columns
-                         if column.name not in columns_to_ignore]
+                         if Column(column.name) not in columns_to_ignore]
     statistics: Dict[Column, List[ColumnStatistics]] = defaultdict(list)
     conn = engine.connect()
     for column, statistic in _set_valued_statistics(
