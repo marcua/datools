@@ -21,6 +21,14 @@ def _single_column_candidate_predicates(
         group_bys: Tuple[Column, ...],
         aggregate: Aggregate,
 ) -> Generator[Tuple[Predicate, ...], None, None]:
+    """Based on column statistics for range- and set-valued columns,
+    returns a list of predicates that either filter on ranges (i.e.,
+    lower <= column AND column < higher) or equality (i.e., column =
+    constant). These candidates can be tested as outlier explanations.
+
+    :returns: A tuple representing a conjunction of
+              predicates (e.g., predicate1 AND predicate2).
+    """
     columns_to_ignore: Set[Column] = {group_by for group_by in group_bys}
     columns_to_ignore.add(aggregate.column)
     statistics = column_statistics(engine, table, columns_to_ignore)

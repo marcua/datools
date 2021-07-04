@@ -148,7 +148,7 @@ def column_statistics(
     table_metadata = sqlalchemy.Table(
         table.name, metadata, autoload_with=engine)
     candidate_columns = [column for column in table_metadata.columns
-                         if column.name not in columns_to_ignore]
+                         if Column(column.name) not in columns_to_ignore]
     statistics: Dict[Column, List[ColumnStatistics]] = defaultdict(list)
     conn = engine.connect()
     for column, statistic in _set_valued_statistics(
