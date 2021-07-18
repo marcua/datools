@@ -9,7 +9,7 @@ from datools.models import Operator
 from datools.models import Predicate
 from datools.models import Constant
 from datools.models import Table
-from datools.scorpion.explanations import generate_explanations
+from datools.explanation.algorithms import generate_explanations
 from .fixtures import generate_scorpion_testdb
 
 

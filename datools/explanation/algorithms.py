@@ -66,7 +66,7 @@ def generate_explanations(
     VLDB 2013) that cause an aggregate to be different in an outlier
     set than a holdout set.
 
-    :param connection: A SQLite connection.
+    :param engine: A SQLite engine.
     :param table: The name of a table.
     :param group_bys: A list of columns to group on.
     :param aggregate: An aggregate on which we identify an outlier.
@@ -78,3 +78,40 @@ def generate_explanations(
     candidates = _single_column_candidate_predicates(
         engine, table, group_bys, aggregate)
     return tuple(candidates)
+
+
+def diff(
+        engine: sqlalchemy.engine.Engine,
+        test_relation: str,
+        control_relation: str,
+        on_columns: Tuple[Column, ...],
+        min_support: float,
+        min_risk_ratio: float,
+        max_order: int
+) -> Tuple[Tuple[Predicate, ...]]:
+    results = engine.execute(test_relation)
+    print(results.cursor.description)
+    first = results.first()
+    print(first)
+    print(results._metadata._keymap)
+    print(list(
+        results._metadata._metadata_for_keys(keys=['voltage', 'created_at'])))
+    print(
+        results._metadata._reduce(keys=['voltage', 'created_at']))
+    print(first._mapping.keys())
+
+    # Get all column names from test_relation and control_relation,
+    # ensure they are the same.
+    # TODO(marcua): figure out why types are None, and match them if you can.
+
+    # Ensure on_columns are a subset of the test/control columns.
+
+    # Get size of test_relation, control_relation.
+
+    # GROUP BY all test_relation columns, remove ones HAVING COUNT /
+    # test_size < min_support.
+
+    # Generate all size-max_order GROUPING SETS along with COUNTs of
+    # test_relation & control_relation and JOIN the two, computing the
+    # risk_ratio. Filter min_support, min_risk_ratio, and sort by
+    # risk_ratio.
