@@ -140,6 +140,13 @@ def diff(
         engine, test_relation, on_column_names, min_support_rows)
     print(test_explanations_query)
 
+    """
+    v1: Ignore max_order for now---let's get one-column explanations.
+      - Add a column to identify the grouping set ID
+      - Left join on test.grouping_id = control.grouping_id
+        and test_grouping_columns = contol_grouping_columns.
+      - Compute risk ratio and filter on it.
+    """
     # Generate all size-max_order GROUPING SETS along with COUNTs of
     # test_relation & control_relation and JOIN the two, computing the
     # risk_ratio. Filter min_support, min_risk_ratio, and sort by
