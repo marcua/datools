@@ -1,15 +1,22 @@
 import sqlalchemy
 
+from math import floor
 from typing import Generator
 from typing import Set
 from typing import Tuple
 
+from datools.errors import DatoolsError
 from datools.models import Aggregate
 from datools.models import Column
 from datools.models import Constant
 from datools.models import Operator
 from datools.models import Predicate
 from datools.models import Table
+from datools.sqlalchemy_utils import GROUP_COLUMNS_KEY
+from datools.sqlalchemy_utils import GROUPING_SETS_KEY
+from datools.sqlalchemy_utils import grouping_sets_query
+from datools.sqlalchemy_utils import query_columns
+from datools.sqlalchemy_utils import query_rows
 from datools.table_statistics import column_statistics
 from datools.table_statistics import RangeValuedStatistics
 from datools.table_statistics import SetValuedStatistics
@@ -80,6 +87,26 @@ def generate_explanations(
     return tuple(candidates)
 
 
+def _explanation_counts_query(
+        engine: sqlalchemy.engine.Engine,
+        relation: str,
+        on_columns: Tuple[str, ...],
+        min_support_rows: int = None
+) -> str:
+    explanation_query = (
+        f'WITH query as ({relation}) '
+        f'SELECT {GROUP_COLUMNS_KEY}, COUNT(*) AS explanation_size '
+        f'FROM query '
+        f'GROUP BY {GROUPING_SETS_KEY} ')
+    if min_support_rows is not None:
+        explanation_query += f'HAVING explanation_size > {min_support_rows}'
+
+    return grouping_sets_query(
+        engine,
+        explanation_query,
+        tuple((column, ) for column in on_columns))
+
+
 def diff(
         engine: sqlalchemy.engine.Engine,
         test_relation: str,
@@ -89,27 +116,29 @@ def diff(
         min_risk_ratio: float,
         max_order: int
 ) -> Tuple[Tuple[Predicate, ...]]:
-    results = engine.execute(test_relation)
-    print(results.cursor.description)
-    first = results.first()
-    print(first)
-    print(results._metadata._keymap)
-    print(list(
-        results._metadata._metadata_for_keys(keys=['voltage', 'created_at'])))
-    print(
-        results._metadata._reduce(keys=['voltage', 'created_at']))
-    print(first._mapping.keys())
-
     # Get all column names from test_relation and control_relation,
     # ensure they are the same.
-    # TODO(marcua): figure out why types are None, and match them if you can.
+    # TODO(marcua): compare types.
+    test_column_names = query_columns(engine, test_relation)
+    control_column_names = query_columns(engine, control_relation)
+    if test_column_names != control_column_names:
+        raise DatoolsError(
+            'test_relation and control_relation have different schemas')
 
     # Ensure on_columns are a subset of the test/control columns.
+    on_column_names = tuple(column.name for column in on_columns)
+    if set(on_column_names) - set(test_column_names):
+        raise DatoolsError('on_columns is not a subset of test_relation')
 
     # Get size of test_relation, control_relation.
+    num_test_rows = query_rows(engine, test_relation)
+    min_support_rows = floor(num_test_rows * min_support)
 
-    # GROUP BY all test_relation columns, remove ones HAVING COUNT /
-    # test_size < min_support.
+    # GROUP BY all test_relation columns, remove ones with a size less
+    # than min_support_rows.
+    test_explanations_query = _explanation_counts_query(
+        engine, test_relation, on_column_names, min_support_rows)
+    print(test_explanations_query)
 
     # Generate all size-max_order GROUPING SETS along with COUNTs of
     # test_relation & control_relation and JOIN the two, computing the
