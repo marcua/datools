@@ -1,6 +1,5 @@
 import sqlalchemy
 
-from textwrap import indent
 from typing import Tuple
 
 

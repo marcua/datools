@@ -121,7 +121,8 @@ def _explanation_counts_query(
 def _diff_query(
         test_explanations_query: str,
         control_explanations_query: str,
-        min_support_ratio: float
+        on_column_names: Tuple[str, ...],
+        min_risk_ratio: float
 ) -> str:
     diff_query = dedent(
         f''''
@@ -132,9 +133,21 @@ def _diff_query(
         control AS (
             {indent(control_explanations_query, 3 * INDENT)}
         )
+        SELECT
+            test.grouping_id,
+            {', '.join(f'test.{column}' for column in on_column_names)}
+        FROM test
+        LEFT JOIN control ON
+            test.grouping_id = control.grouping_id
+            AND {' AND '.join(f'test.{column} = control.{column}'
+                 for column in on_column_names)}
         ''')
-
+    # TODO(marcua): Add odds ratio to SELECT (with NULLIF(control count, 0))
+    # TODO(marcua): Clean up readability of ANDs
+    # TODO(marcua): Filter min_risk_ratio
+    # TODO(marcua): ORDER BY risk_ratio DESC
     return diff_query
+
 
 def diff(
         engine: sqlalchemy.engine.Engine,
@@ -173,14 +186,6 @@ def diff(
     control_explanations_query = _explanation_counts_query(
         engine, control_relation, on_column_names, min_support_rows=None)
     diff_query = _diff_query(
-        test_explanations_query, control_explanations_query, min_risk_ratio)
+        test_explanations_query, control_explanations_query, on_column_names,
+        min_risk_ratio)
     print(diff_query)
-    """
-      - Left join on test.grouping_id = control.grouping_id
-        and test_grouping_columns = contol_grouping_columns.
-      - Compute risk ratio and filter on it.
-    """
-    # Generate all size-max_order GROUPING SETS along with COUNTs of
-    # test_relation & control_relation and JOIN the two, computing the
-    # risk_ratio. Filter min_support, min_risk_ratio, and sort by
-    # risk_ratio.
