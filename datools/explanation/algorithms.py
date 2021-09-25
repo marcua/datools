@@ -1,6 +1,8 @@
 import sqlalchemy
 
 from math import floor
+from textwrap import dedent
+from textwrap import indent
 from typing import Generator
 from typing import Set
 from typing import Tuple
@@ -15,6 +17,7 @@ from datools.models import Table
 from datools.sqlalchemy_utils import GROUP_COLUMNS_KEY
 from datools.sqlalchemy_utils import GROUPING_ID_KEY
 from datools.sqlalchemy_utils import GROUPING_SETS_KEY
+from datools.sqlalchemy_utils import INDENT
 from datools.sqlalchemy_utils import grouping_sets_query
 from datools.sqlalchemy_utils import query_columns
 from datools.sqlalchemy_utils import query_rows
@@ -94,22 +97,44 @@ def _explanation_counts_query(
         on_columns: Tuple[str, ...],
         min_support_rows: int = None
 ) -> str:
-    explanation_query = (
-        f'WITH query as ({relation}) '
-        f'SELECT '
-        f'    {GROUPING_ID_KEY} AS grouping_id, '
-        f'    {GROUP_COLUMNS_KEY}, '
-        f'    COUNT(*) AS explanation_size '
-        f'FROM query '
-        f'GROUP BY {GROUPING_SETS_KEY} ')
+    explanation_query = dedent(
+        f'''
+        WITH query AS (
+            {relation}
+        )
+        SELECT
+            {GROUPING_ID_KEY} AS grouping_id,
+            {GROUP_COLUMNS_KEY},
+            COUNT(*) AS explanation_size
+        FROM query
+        GROUP BY {GROUPING_SETS_KEY}
+        ''')
     if min_support_rows is not None:
-        explanation_query += f'HAVING explanation_size > {min_support_rows}'
+        explanation_query += f'HAVING explanation_size > {min_support_rows}\n'
 
     return grouping_sets_query(
         engine,
         explanation_query,
         tuple((column, ) for column in on_columns))
 
+
+def _diff_query(
+        test_explanations_query: str,
+        control_explanations_query: str,
+        min_support_ratio: float
+) -> str:
+    diff_query = dedent(
+        f''''
+        WITH
+        test AS (
+            {indent(test_explanations_query, 3 * INDENT)}
+        ),
+        control AS (
+            {indent(control_explanations_query, 3 * INDENT)}
+        )
+        ''')
+
+    return diff_query
 
 def diff(
         engine: sqlalchemy.engine.Engine,
@@ -145,8 +170,11 @@ def diff(
     # than min_support_rows.
     test_explanations_query = _explanation_counts_query(
         engine, test_relation, on_column_names, min_support_rows)
-    print(test_explanations_query)
-
+    control_explanations_query = _explanation_counts_query(
+        engine, control_relation, on_column_names, min_support_rows=None)
+    diff_query = _diff_query(
+        test_explanations_query, control_explanations_query, min_risk_ratio)
+    print(diff_query)
     """
       - Left join on test.grouping_id = control.grouping_id
         and test_grouping_columns = contol_grouping_columns.

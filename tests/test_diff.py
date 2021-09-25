@@ -15,5 +15,5 @@ def test_diff():
          Column('humidity')),
         .05,
         2.0,
-        3)
+        1)
     assert(len(candidates) == 24)

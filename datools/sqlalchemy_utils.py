@@ -1,10 +1,13 @@
 import sqlalchemy
 
+from textwrap import indent
 from typing import Tuple
+
 
 GROUP_COLUMNS_KEY = '%%%GROUP_COLUMNS%%%'
 GROUPING_SETS_KEY = '%%%GROUPING_SETS%%%'
 GROUPING_ID_KEY = '%%%GROUPING_ID%%%'
+INDENT = '    '
 
 
 def query_columns(engine: sqlalchemy.engine.Engine, query: str) -> Tuple[str]:
