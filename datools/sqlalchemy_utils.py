@@ -4,6 +4,7 @@ from typing import Tuple
 
 GROUP_COLUMNS_KEY = '%%%GROUP_COLUMNS%%%'
 GROUPING_SETS_KEY = '%%%GROUPING_SETS%%%'
+GROUPING_ID_KEY = '%%%GROUPING_ID%%%'
 
 
 def query_columns(engine: sqlalchemy.engine.Engine, query: str) -> Tuple[str]:
@@ -28,11 +29,15 @@ def grouping_sets_query(
         query: str,
         sets: Tuple[Tuple[str, ...]],
         group_columns_key: str = GROUP_COLUMNS_KEY,
-        grouping_sets_key: str = GROUPING_SETS_KEY
+        grouping_sets_key: str = GROUPING_SETS_KEY,
+        grouping_id_key: str = GROUPING_ID_KEY
 ) -> str:
     """Takes a `query` like
 
-    SELECT {group_columns_key}, AGGREGATE1(args), AGGREGATE2(args)
+    SELECT
+        {grouping_id_key} AS grouping_id,
+        {group_columns_key},
+        AGGREGATE1(args), AGGREGATE2(args)
     ...
     GROUP BY {grouping_sets_key}
     ...
@@ -44,8 +49,8 @@ def grouping_sets_query(
     implement the query by capturing the UNION ALL output of multiple
     GROUP BY subqueries.
 
-    TODO(marcua): Add support for GROUPING ID in case columns have NULL
-    values.
+    The `grouping_id` will be set to a unique value for each grouping set,
+    and will be deterministic on the iteration order of `sets`.
     """
     if engine.url.get_backend_name() == 'postgresql':
         # TODO(marcua): Implement grouping sets using SQL syntax in
@@ -59,12 +64,13 @@ def grouping_sets_query(
                 column_indices[column] = len(column_indices)
 
     queries = []
-    for grouping_set in sets:
+    for set_id, grouping_set in enumerate(sets):
         group_columns = [f'NULL AS {column}'
                          for column in column_indices.keys()]
         for column in grouping_set:
             group_columns[column_indices[column]] = column
         queries.append(query
+                       .replace(grouping_id_key, str(set_id))
                        .replace(group_columns_key, ', '.join(group_columns))
                        .replace(grouping_sets_key, ', '.join(grouping_set)))
     return '\nUNION ALL\n'.join(queries)

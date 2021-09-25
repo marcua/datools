@@ -13,6 +13,7 @@ from datools.models import Operator
 from datools.models import Predicate
 from datools.models import Table
 from datools.sqlalchemy_utils import GROUP_COLUMNS_KEY
+from datools.sqlalchemy_utils import GROUPING_ID_KEY
 from datools.sqlalchemy_utils import GROUPING_SETS_KEY
 from datools.sqlalchemy_utils import grouping_sets_query
 from datools.sqlalchemy_utils import query_columns
@@ -95,7 +96,10 @@ def _explanation_counts_query(
 ) -> str:
     explanation_query = (
         f'WITH query as ({relation}) '
-        f'SELECT {GROUP_COLUMNS_KEY}, COUNT(*) AS explanation_size '
+        f'SELECT '
+        f'    {GROUPING_ID_KEY} AS grouping_id, '
+        f'    {GROUP_COLUMNS_KEY}, '
+        f'    COUNT(*) AS explanation_size '
         f'FROM query '
         f'GROUP BY {GROUPING_SETS_KEY} ')
     if min_support_rows is not None:
@@ -116,6 +120,9 @@ def diff(
         min_risk_ratio: float,
         max_order: int
 ) -> Tuple[Tuple[Predicate, ...]]:
+    if max_order != 1:
+        raise DatoolsError('Only one-column predicates are supported for now')
+
     # Get all column names from test_relation and control_relation,
     # ensure they are the same.
     # TODO(marcua): compare types.
@@ -141,8 +148,6 @@ def diff(
     print(test_explanations_query)
 
     """
-    v1: Ignore max_order for now---let's get one-column explanations.
-      - Add a column to identify the grouping set ID
       - Left join on test.grouping_id = control.grouping_id
         and test_grouping_columns = contol_grouping_columns.
       - Compute risk ratio and filter on it.
