@@ -99,9 +99,6 @@ def _explanation_counts_query(
 ) -> str:
     explanation_query = dedent(
         f'''
-        WITH query AS (
-            {relation}
-        )
         SELECT
             {GROUPING_ID_KEY} AS grouping_id,
             {GROUP_COLUMNS_KEY},
@@ -112,20 +109,29 @@ def _explanation_counts_query(
     if min_support_rows is not None:
         explanation_query += f'HAVING explanation_size > {min_support_rows}\n'
 
-    return grouping_sets_query(
+    group_explanations_query = grouping_sets_query(
         engine,
         explanation_query,
         tuple((column, ) for column in on_columns))
+    return dedent(
+        f'''
+        WITH query AS (
+            {relation}
+        )
+        {group_explanations_query}
+        ''')
 
 
 def _diff_query(
         test_explanations_query: str,
         control_explanations_query: str,
+        num_test_rows: float,
+        num_control_rows: float,
         on_column_names: Tuple[str, ...],
         min_risk_ratio: float
 ) -> str:
     diff_query = dedent(
-        f''''
+        f'''
         WITH
         test AS (
             {indent(test_explanations_query, 3 * INDENT)}
@@ -135,17 +141,19 @@ def _diff_query(
         )
         SELECT
             test.grouping_id,
-            {', '.join(f'test.{column}' for column in on_column_names)}
+            {', '.join(f'test.{column}' for column in on_column_names)},
+            (test.explanation_size / (test.explanation_size + NULLIF(control.explanation_size, 0))) /
+            (({num_test_rows} - test.explanation_size) / (({num_test_rows} - test.explanation_size) + ({num_control_rows} - NULLIF(control.explanation_size, 0)))) AS risk_ratio
         FROM test
         LEFT JOIN control ON
             test.grouping_id = control.grouping_id
             AND {' AND '.join(f'test.{column} = control.{column}'
                  for column in on_column_names)}
+        ORDER BY risk_ratio DESC
         ''')
-    # TODO(marcua): Add odds ratio to SELECT (with NULLIF(control count, 0))
+    # TODO(marcua): Figure out why all risk ratios are NULL (print results of the diff query, and also the results of the test and control queries)
+    # TODO(marcua):         -- WHERE risk_ratio > {min_risk_ratio}
     # TODO(marcua): Clean up readability of ANDs
-    # TODO(marcua): Filter min_risk_ratio
-    # TODO(marcua): ORDER BY risk_ratio DESC
     return diff_query
 
 
@@ -176,7 +184,8 @@ def diff(
         raise DatoolsError('on_columns is not a subset of test_relation')
 
     # Get size of test_relation, control_relation.
-    num_test_rows = query_rows(engine, test_relation)
+    num_test_rows = 1.0 * query_rows(engine, test_relation)
+    num_control_rows = 1.0 * query_rows(engine, control_relation)
     min_support_rows = floor(num_test_rows * min_support)
 
     # GROUP BY all test_relation columns, remove ones with a size less
@@ -186,6 +195,9 @@ def diff(
     control_explanations_query = _explanation_counts_query(
         engine, control_relation, on_column_names, min_support_rows=None)
     diff_query = _diff_query(
-        test_explanations_query, control_explanations_query, on_column_names,
-        min_risk_ratio)
-    print(diff_query)
+        test_explanations_query, control_explanations_query,
+        num_test_rows, num_control_rows,
+        on_column_names, min_risk_ratio)
+    for row in engine.execute(diff_query):
+        print(row)
+    # print(diff_query)
