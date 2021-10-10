@@ -1,4 +1,5 @@
 import sqlalchemy
+from tabulate import tabulate
 
 from typing import Tuple
 
@@ -14,6 +15,17 @@ def query_columns(engine: sqlalchemy.engine.Engine, query: str) -> Tuple[str]:
     columns = tuple(column[0] for column in results.cursor.description)
     results.close()
     return columns
+
+
+def query_results_pretty_print(
+        engine: sqlalchemy.engine.Engine, query: str, label: str = None
+) -> None:
+    if label:
+        print(f'*** {label} ***')
+    result = engine.execute(query)
+    all_rows = (dict(row) for row in result)
+    print(tabulate(all_rows, headers='keys', tablefmt='psql'))
+    result.close()
 
 
 def query_rows(engine: sqlalchemy.engine.Engine, query: str) -> int:

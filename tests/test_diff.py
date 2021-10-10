@@ -14,6 +14,6 @@ def test_diff():
         (Column('created_at'), Column('sensor_id'), Column('voltage'),
          Column('humidity')),
         .05,
-        1.0,
+        2.0,
         1)
     assert(len(candidates) == 24)

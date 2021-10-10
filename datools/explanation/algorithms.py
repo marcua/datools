@@ -20,6 +20,7 @@ from datools.sqlalchemy_utils import GROUPING_SETS_KEY
 from datools.sqlalchemy_utils import INDENT
 from datools.sqlalchemy_utils import grouping_sets_query
 from datools.sqlalchemy_utils import query_columns
+from datools.sqlalchemy_utils import query_results_pretty_print
 from datools.sqlalchemy_utils import query_rows
 from datools.table_statistics import column_statistics
 from datools.table_statistics import RangeValuedStatistics
@@ -140,19 +141,20 @@ def _diff_query(
             {indent(control_explanations_query, 3 * INDENT)}
         )
         SELECT
-            test.grouping_id,
             {', '.join(f'test.{column}' for column in on_column_names)},
-            (test.explanation_size / (test.explanation_size + NULLIF(control.explanation_size, 0))) /
-            (({num_test_rows} - test.explanation_size) / (({num_test_rows} - test.explanation_size) + ({num_control_rows} - NULLIF(control.explanation_size, 0)))) AS risk_ratio
+            test.explanation_size AS test_explanation_size,
+            control.explanation_size AS control_explanation_size,
+            (test.explanation_size / (test.explanation_size + COALESCE(control.explanation_size, 0))) /
+            (({num_test_rows} - test.explanation_size) / (({num_test_rows} - test.explanation_size) + ({num_control_rows} - COALESCE(control.explanation_size, 0)))) AS risk_ratio
         FROM test
         LEFT JOIN control ON
             test.grouping_id = control.grouping_id
             AND {' AND '.join(f'test.{column} = control.{column}'
                  for column in on_column_names)}
+        WHERE risk_ratio > {min_risk_ratio}
         ORDER BY risk_ratio DESC
         ''')
-    # TODO(marcua): Figure out why all risk ratios are NULL (print results of the diff query, and also the results of the test and control queries)
-    # TODO(marcua):         -- WHERE risk_ratio > {min_risk_ratio}
+    # TODO(marcua): Figure out why all control explanation sizes NULL in the diff query after the left join, but nonempty in the control explanation size query.
     # TODO(marcua): Clean up readability of ANDs
     return diff_query
 
@@ -198,6 +200,7 @@ def diff(
         test_explanations_query, control_explanations_query,
         num_test_rows, num_control_rows,
         on_column_names, min_risk_ratio)
-    for row in engine.execute(diff_query):
-        print(row)
+    query_results_pretty_print(engine, test_explanations_query, 'test')
+    query_results_pretty_print(engine, control_explanations_query, 'control')
+    query_results_pretty_print(engine, diff_query, 'diff')
     # print(diff_query)
