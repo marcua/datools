@@ -149,12 +149,12 @@ def _diff_query(
         FROM test
         LEFT JOIN control ON
             test.grouping_id = control.grouping_id
-            AND {' AND '.join(f'test.{column} = control.{column}'
+            AND {' AND '.join(f'((test.{column} = control.{column}) OR ((test.{column} IS NULL) AND (control.{column} IS NULL)))'
                  for column in on_column_names)}
-        WHERE risk_ratio > {min_risk_ratio}
         ORDER BY risk_ratio DESC
         ''')
-    # TODO(marcua): Figure out why all control explanation sizes NULL in the diff query after the left join, but nonempty in the control explanation size query.
+    # WHERE risk_ratio > {min_risk_ratio}
+    # TODO(marcua): Figure out why risk ratios are 0 or NULL.
     # TODO(marcua): Clean up readability of ANDs
     return diff_query
 
