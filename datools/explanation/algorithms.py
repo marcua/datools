@@ -155,6 +155,7 @@ def _diff_query(
             {indent(control_explanations_query, 3 * INDENT)}
         )
         SELECT
+            test.grouping_id,
             {', '.join(f'test.{column}' for column in on_column_names)},
             test.explanation_size AS test_explanation_size,
             control.explanation_size AS control_explanation_size,
@@ -163,14 +164,14 @@ def _diff_query(
             /
             (({adjusted_test_rows} - test.explanation_size)
              / (({adjusted_test_rows} - test.explanation_size)
-                + ({adjusted_control_rows} - COALESCE(control.explanation_size, 0)))
+                + ({adjusted_control_rows}
+                   - COALESCE(control.explanation_size, 0)))
             ) AS risk_ratio
         FROM test
         LEFT JOIN control ON {join_statement}
+        WHERE risk_ratio > {min_risk_ratio}
         ORDER BY risk_ratio DESC
         ''')
-    # WHERE risk_ratio > {min_risk_ratio}
-    # TODO(marcua): Figure out why risk ratios are 0 or NULL.
     return diff_query
 
 
@@ -215,9 +216,7 @@ def diff(
         test_explanations_query, control_explanations_query,
         num_test_rows, num_control_rows,
         on_column_names, min_risk_ratio)
-    query_results_pretty_print(engine, test_relation, 'test relation')
-    query_results_pretty_print(engine, control_relation, 'control relation')
-    query_results_pretty_print(engine, test_explanations_query, 'test')
-    query_results_pretty_print(engine, control_explanations_query, 'control')
+    # TODO(marcua): map grouping_id and row values into
+    # predicates. Return value should be Tuple[Explanation], where
+    # Explanation contains Tuple[Predicate] and risk_ratio.
     query_results_pretty_print(engine, diff_query, 'diff')
-    # print(diff_query)

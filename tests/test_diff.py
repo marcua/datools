@@ -16,4 +16,4 @@ def test_diff():
         .05,
         2.0,
         1)
-    assert(len(candidates) == 24)
+    assert(len(candidates) == 2)
