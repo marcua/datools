@@ -103,7 +103,7 @@ def _explanation_counts_query(
         SELECT
             {GROUPING_ID_KEY} AS grouping_id,
             {GROUP_COLUMNS_KEY},
-            COUNT(*) AS explanation_size
+            1.0 * COUNT(*) AS explanation_size
         FROM query
         GROUP BY {GROUPING_SETS_KEY}
         ''')
@@ -137,6 +137,14 @@ def _diff_query(
            f' OR ((test.{column} IS NULL) AND (control.{column} IS NULL)))'
            for column in on_column_names])
     join_statement = ' AND '.join(join_conditions)
+
+    # TODO(marcua): Consult with someone better at statistics on how
+    # to avoid division by 0 in the risk ratio when a group encompases
+    # the entire relation. For now, make the relation size one larger
+    # than it actually is.
+    adjusted_test_rows = num_test_rows + 1
+    adjusted_control_rows = num_control_rows + 1
+
     diff_query = dedent(
         f'''
         WITH
@@ -153,9 +161,9 @@ def _diff_query(
             (test.explanation_size / (test.explanation_size
                                       + COALESCE(control.explanation_size, 0)))
             /
-            (({num_test_rows} - test.explanation_size)
-             / (({num_test_rows} - test.explanation_size)
-                + ({num_control_rows} - COALESCE(control.explanation_size, 0)))
+            (({adjusted_test_rows} - test.explanation_size)
+             / (({adjusted_test_rows} - test.explanation_size)
+                + ({adjusted_control_rows} - COALESCE(control.explanation_size, 0)))
             ) AS risk_ratio
         FROM test
         LEFT JOIN control ON {join_statement}
@@ -207,6 +215,8 @@ def diff(
         test_explanations_query, control_explanations_query,
         num_test_rows, num_control_rows,
         on_column_names, min_risk_ratio)
+    query_results_pretty_print(engine, test_relation, 'test relation')
+    query_results_pretty_print(engine, control_relation, 'control relation')
     query_results_pretty_print(engine, test_explanations_query, 'test')
     query_results_pretty_print(engine, control_explanations_query, 'control')
     query_results_pretty_print(engine, diff_query, 'diff')
