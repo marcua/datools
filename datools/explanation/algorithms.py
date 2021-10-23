@@ -131,6 +131,12 @@ def _diff_query(
         on_column_names: Tuple[str, ...],
         min_risk_ratio: float
 ) -> str:
+    join_conditions = (
+        ['test.grouping_id = control.grouping_id']
+        + [f'((test.{column} = control.{column}) '
+           f' OR ((test.{column} IS NULL) AND (control.{column} IS NULL)))'
+           for column in on_column_names])
+    join_statement = ' AND '.join(join_conditions)
     diff_query = dedent(
         f'''
         WITH
@@ -144,18 +150,19 @@ def _diff_query(
             {', '.join(f'test.{column}' for column in on_column_names)},
             test.explanation_size AS test_explanation_size,
             control.explanation_size AS control_explanation_size,
-            (test.explanation_size / (test.explanation_size + COALESCE(control.explanation_size, 0))) /
-            (({num_test_rows} - test.explanation_size) / (({num_test_rows} - test.explanation_size) + ({num_control_rows} - COALESCE(control.explanation_size, 0)))) AS risk_ratio
+            (test.explanation_size / (test.explanation_size
+                                      + COALESCE(control.explanation_size, 0)))
+            /
+            (({num_test_rows} - test.explanation_size)
+             / (({num_test_rows} - test.explanation_size)
+                + ({num_control_rows} - COALESCE(control.explanation_size, 0)))
+            ) AS risk_ratio
         FROM test
-        LEFT JOIN control ON
-            test.grouping_id = control.grouping_id
-            AND {' AND '.join(f'((test.{column} = control.{column}) OR ((test.{column} IS NULL) AND (control.{column} IS NULL)))'
-                 for column in on_column_names)}
+        LEFT JOIN control ON {join_statement}
         ORDER BY risk_ratio DESC
         ''')
     # WHERE risk_ratio > {min_risk_ratio}
     # TODO(marcua): Figure out why risk ratios are 0 or NULL.
-    # TODO(marcua): Clean up readability of ANDs
     return diff_query
 
 
