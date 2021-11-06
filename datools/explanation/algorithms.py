@@ -3,7 +3,9 @@ import sqlalchemy
 from math import floor
 from textwrap import dedent
 from textwrap import indent
+from typing import Dict
 from typing import Generator
+from typing import List
 from typing import Set
 from typing import Tuple
 
@@ -11,6 +13,7 @@ from datools.errors import DatoolsError
 from datools.models import Aggregate
 from datools.models import Column
 from datools.models import Constant
+from datools.models import Explanation
 from datools.models import Operator
 from datools.models import Predicate
 from datools.models import Table
@@ -20,7 +23,6 @@ from datools.sqlalchemy_utils import GROUPING_SETS_KEY
 from datools.sqlalchemy_utils import INDENT
 from datools.sqlalchemy_utils import grouping_sets_query
 from datools.sqlalchemy_utils import query_columns
-from datools.sqlalchemy_utils import query_results_pretty_print
 from datools.sqlalchemy_utils import query_rows
 from datools.table_statistics import column_statistics
 from datools.table_statistics import RangeValuedStatistics
@@ -95,9 +97,9 @@ def generate_explanations(
 def _explanation_counts_query(
         engine: sqlalchemy.engine.Engine,
         relation: str,
-        on_columns: Tuple[str, ...],
+        on_columns: Tuple[Column, ...],
         min_support_rows: int = None
-) -> str:
+) -> Tuple[str, Dict[int, Tuple[str, ...]]]:
     explanation_query = dedent(
         f'''
         SELECT
@@ -110,7 +112,7 @@ def _explanation_counts_query(
     if min_support_rows is not None:
         explanation_query += f'HAVING explanation_size > {min_support_rows}\n'
 
-    group_explanations_query = grouping_sets_query(
+    group_explanations_query, grouping_set_index = grouping_sets_query(
         engine,
         explanation_query,
         tuple((column, ) for column in on_columns))
@@ -120,7 +122,7 @@ def _explanation_counts_query(
             {relation}
         )
         {group_explanations_query}
-        ''')
+        '''), grouping_set_index
 
 
 def _diff_query(
@@ -128,14 +130,15 @@ def _diff_query(
         control_explanations_query: str,
         num_test_rows: float,
         num_control_rows: float,
-        on_column_names: Tuple[str, ...],
+        on_columns: Tuple[Column, ...],
         min_risk_ratio: float
 ) -> str:
     join_conditions = (
         ['test.grouping_id = control.grouping_id']
-        + [f'((test.{column} = control.{column}) '
-           f' OR ((test.{column} IS NULL) AND (control.{column} IS NULL)))'
-           for column in on_column_names])
+        + [f'((test.{column.name} = control.{column.name}) '
+           f' OR ((test.{column.name} IS NULL) '
+           f'     AND (control.{column.name} IS NULL)))'
+           for column in on_columns])
     join_statement = ' AND '.join(join_conditions)
 
     # TODO(marcua): Consult with someone better at statistics on how
@@ -156,7 +159,7 @@ def _diff_query(
         )
         SELECT
             test.grouping_id,
-            {', '.join(f'test.{column}' for column in on_column_names)},
+            {', '.join(f'test.{column.name}' for column in on_columns)},
             test.explanation_size AS test_explanation_size,
             control.explanation_size AS control_explanation_size,
             (test.explanation_size / (test.explanation_size
@@ -183,7 +186,7 @@ def diff(
         min_support: float,
         min_risk_ratio: float,
         max_order: int
-) -> Tuple[Tuple[Predicate, ...]]:
+) -> List[Explanation]:
     if max_order != 1:
         raise DatoolsError('Only one-column predicates are supported for now')
 
@@ -208,15 +211,22 @@ def diff(
 
     # GROUP BY all test_relation columns, remove ones with a size less
     # than min_support_rows.
-    test_explanations_query = _explanation_counts_query(
-        engine, test_relation, on_column_names, min_support_rows)
-    control_explanations_query = _explanation_counts_query(
-        engine, control_relation, on_column_names, min_support_rows=None)
+    test_explanations_query, grouping_set_index = _explanation_counts_query(
+        engine, test_relation, on_columns, min_support_rows)
+    control_explanations_query, _ = _explanation_counts_query(
+        engine, control_relation, on_columns, min_support_rows=None)
     diff_query = _diff_query(
         test_explanations_query, control_explanations_query,
         num_test_rows, num_control_rows,
-        on_column_names, min_risk_ratio)
-    # TODO(marcua): map grouping_id and row values into
-    # predicates. Return value should be Tuple[Explanation], where
-    # Explanation contains Tuple[Predicate] and risk_ratio.
-    query_results_pretty_print(engine, diff_query, 'diff')
+        on_columns, min_risk_ratio)
+
+    result = engine.execute(diff_query)
+    explanations = []
+    for row in result:
+        row = dict(row)
+        predicates = tuple(
+            Predicate(column, Operator.EQUALS, row[column.name])
+            for column in grouping_set_index[row['grouping_id']])
+        explanations.append(Explanation(predicates, row['risk_ratio']))
+    result.close()
+    return explanations
