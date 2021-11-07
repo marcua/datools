@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+from typing import Tuple
 
 
 AggregateFunction = Enum(
@@ -45,3 +46,9 @@ class Predicate:
 @dataclass
 class Table:
     name: str
+
+
+@dataclass
+class Explanation:
+    predicates: Tuple[Predicate, ...]
+    risk_ratio: float

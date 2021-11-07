@@ -1,0 +1,2 @@
+class DatoolsError(Exception):
+    pass
