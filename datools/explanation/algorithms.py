@@ -68,32 +68,6 @@ def _single_column_candidate_predicates(
                         Predicate(column, Operator.LT, Constant(second)))
 
 
-def generate_explanations(
-        engine: sqlalchemy.engine.Engine,
-        table: Table,
-        group_bys: Tuple[Column, ...],
-        aggregate: Aggregate,
-        outlier_predicates: Tuple[Predicate, ...],
-        holdout_predicates: Tuple[Predicate, ...]
-) -> Tuple[Tuple[Predicate, ...]]:
-    """Generates explanation predicates based on Scorpion (Wu & Madden,
-    VLDB 2013) that cause an aggregate to be different in an outlier
-    set than a holdout set.
-
-    :param engine: A SQLite engine.
-    :param table: The name of a table.
-    :param group_bys: A list of columns to group on.
-    :param aggregate: An aggregate on which we identify an outlier.
-    :param outlier_predicates: Filters on the result that
-        exhibit unexpected conditions.
-    :param holdout_predicates: Filters on the result that
-        exhibit normal conditions.
-    """
-    candidates = _single_column_candidate_predicates(
-        engine, table, group_bys, aggregate)
-    return tuple(candidates)
-
-
 def _explanation_counts_query(
         engine: sqlalchemy.engine.Engine,
         relation: str,
@@ -187,6 +161,44 @@ def diff(
         min_risk_ratio: float,
         max_order: int
 ) -> List[Explanation]:
+    """
+    Generates candidate explanations for why records are more likely to appear
+    in `test_relation` than `control_relation`. For example, if you provided
+    a test set of customers who are more likely to churn and a control set of
+    customers who are less likely to churn, the algorithm might list predicates
+    related to business category or degree of service.
+
+    This is an implementatin of "DIFF: A Relational Interface
+    for Large-Scale Data Explanation"
+    by Firas Abuzaid, Peter Kraft, Sahaana Suri, Edward Gan,
+    Eric Xu, Atul Shenoy, Asvin Ananthanarayan, John Sheu,
+    Erik Meijer, Xi Wu, Jeff Naughton, Peter Bailis, and Matei Zaharia.
+    http://www.bailis.org/papers/diff-vldb2019.pdf
+
+    Figure 1 of that paper contains a declarative description of the
+    implemented algorithm.
+
+    :param engine: A SQLAlchemy engine.
+    :param test_relation: A SQL query resulting in rows whose presence
+                          you would like to explain.
+    :param control_relation: A SQL query (with the same schema
+                             as `test_relation`) that contains a control
+                             group of rows that are different from/a
+                             baseline for `test_relation`.
+    :param on_columns: A list of columns that might contain an explanation
+                       for the difference between test and control.
+    :param min_support: A value in the range [0, 1] with the minimum fraction
+                        of the test set that an explanation should contain.
+    :param min_risk_ratio: A positive floating point value with the minimum
+                           risk ratio of an explanation. A high risk ratio
+                           means an explanation is more likely to describe a
+                           row in `test_relation` than `control_relation`.
+    :param max_order: The largest number of columns on which to consider
+                      an explanation. For example, a 2-column explanation could
+                      be that (category='dog walker' AND signup_day='sunday').
+                      The current implementation only supports 1-column
+                      explanations.
+    """
     if max_order != 1:
         raise DatoolsError('Only one-column predicates are supported for now')
 
