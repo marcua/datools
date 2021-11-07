@@ -235,10 +235,9 @@ def diff(
     result = engine.execute(diff_query)
     explanations = []
     for row in result:
-        row = dict(row)
         predicates = tuple(
             Predicate(column, Operator.EQUALS, row[column.name])
-            for column in grouping_set_index[row['grouping_id']])
-        explanations.append(Explanation(predicates, row['risk_ratio']))
+            for column in grouping_set_index[row.grouping_id])
+        explanations.append(Explanation(predicates, row.risk_ratio))
     result.close()
     return explanations
