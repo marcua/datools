@@ -36,7 +36,7 @@ def query_rows(engine: sqlalchemy.engine.Engine, query: str) -> int:
         f'WITH query AS ({query}) '
         f'SELECT COUNT(*) AS num_rows FROM query')
     results = engine.execute(count_query)
-    rows = results.first()._mapping['num_rows']
+    rows = results.first().num_rows
     results.close()
     return rows
 
