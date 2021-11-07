@@ -12,7 +12,8 @@ from sqlalchemy.schema import Table
 
 
 def generate_scorpion_testdb() -> Engine:
-    """Create a test DB from Table 1 of the Scorpion paper.
+    """Create a test DB from Table 1 of the Scorpion paper (Wu & Madden,
+    VLDB 2013).
 
     Rather than make sensor_id a foreign key, we make it a character
     type to test a wider variety of column types.
