@@ -49,10 +49,10 @@ def _single_column_candidate_predicates(
     for column, statistics_list in statistics.items():
         for statistic in statistics_list:
             if isinstance(statistic, SetValuedStatistics):
-                yield from (Predicate(
+                yield from ((Predicate(
                     column,
                     Operator.EQUALS,
-                    Constant(value)) for value in statistic.popular_values)
+                    Constant(value)), ) for value in statistic.popular_values)
             elif isinstance(statistic, RangeValuedStatistics):
                 if len(statistic.bucket_minimums) == 1:
                     continue
@@ -73,7 +73,7 @@ def _explanation_counts_query(
         relation: str,
         on_columns: Tuple[Column, ...],
         min_support_rows: int = None
-) -> Tuple[str, Dict[int, Tuple[str, ...]]]:
+) -> Tuple[str, Dict[int, Tuple[Column, ...]]]:
     explanation_query = dedent(
         f'''
         SELECT

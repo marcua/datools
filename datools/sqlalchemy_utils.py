@@ -46,7 +46,7 @@ def query_rows(engine: sqlalchemy.engine.Engine, query: str) -> int:
 def grouping_sets_query(
         engine: sqlalchemy.engine.Engine,
         query: str,
-        sets: Tuple[Tuple[Column, ...]],
+        sets: Tuple[Tuple[Column, ...], ...],
         group_columns_key: str = GROUP_COLUMNS_KEY,
         grouping_sets_key: str = GROUPING_SETS_KEY,
         grouping_id_key: str = GROUPING_ID_KEY
