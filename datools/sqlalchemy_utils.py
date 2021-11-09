@@ -13,7 +13,9 @@ GROUPING_ID_KEY = '%%%GROUPING_ID%%%'
 INDENT = '    '
 
 
-def query_columns(engine: sqlalchemy.engine.Engine, query: str) -> Tuple[str]:
+def query_columns(
+        engine: sqlalchemy.engine.Engine, query: str
+) -> Tuple[str, ...]:
     results = engine.execute(query)
     columns = tuple(column[0] for column in results.cursor.description)
     results.close()
@@ -44,11 +46,11 @@ def query_rows(engine: sqlalchemy.engine.Engine, query: str) -> int:
 def grouping_sets_query(
         engine: sqlalchemy.engine.Engine,
         query: str,
-        sets: Tuple[Tuple[Column, ...]],
+        sets: Tuple[Tuple[Column, ...], ...],
         group_columns_key: str = GROUP_COLUMNS_KEY,
         grouping_sets_key: str = GROUPING_SETS_KEY,
         grouping_id_key: str = GROUPING_ID_KEY
-) -> Tuple[str, Dict[int, Tuple[str, ...]]]:
+) -> Tuple[str, Dict[int, Tuple[Column, ...]]]:
     """Takes a `query` like
 
     SELECT
@@ -75,7 +77,7 @@ def grouping_sets_query(
         # TODO(marcua): Implement grouping sets using SQL syntax in
         # databases that support it.
         pass
-    column_indices = {}
+    column_indices: Dict[Column, int] = {}
     for grouping_set in sets:
         for column in grouping_set:
             index = column_indices.get(column)
@@ -83,7 +85,7 @@ def grouping_sets_query(
                 column_indices[column] = len(column_indices)
 
     queries = []
-    set_index: Dict[int, Tuple[str, ...]] = {}
+    set_index: Dict[int, Tuple[Column, ...]] = {}
     for set_id, grouping_set in enumerate(sets):
         set_index[set_id] = grouping_set
         group_columns = [f'NULL AS {column.name}'

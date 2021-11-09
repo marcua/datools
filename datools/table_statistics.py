@@ -74,7 +74,7 @@ def _set_valued_statistics(
         table: Table,
         columns: List[Column]
 ) -> Generator[Tuple[Column, SetValuedStatistics], None, None]:
-    clauses: list[str] = []
+    clauses: List[str] = []
     for column in columns:
         clauses.append(
             f'COUNT(DISTINCT {column.name})'
@@ -101,9 +101,9 @@ def _range_valued_statistics(
         conn: sqlalchemy.engine.Connection,
         table: Table,
         columns: List[Column]
-) -> Generator[Tuple[Column, SetValuedStatistics], None, None]:
-    bucket_clauses: list[str] = []
-    first_clauses: list[str] = []
+) -> Generator[Tuple[Column, RangeValuedStatistics], None, None]:
+    bucket_clauses: List[str] = []
+    first_clauses: List[str] = []
     for column in columns:
         bucket_clauses.append(
             f'{column.name}, '
@@ -129,7 +129,7 @@ def _range_valued_statistics(
     # bucket. Since sqlite doesn't support CUBE/ROLLUP/GROUPING SETS,
     # we do this grouping manually by creating a `set` of the
     # `first_value` for each bucket.
-    column_values: Dict[Column, List[Any]] = defaultdict(set)
+    column_values: Dict[Column, Set[Any]] = defaultdict(set)
     for row in results:
         for column in columns:
             column_values[column].add(row[f'{column.name}_bucket_value'])
@@ -151,14 +151,14 @@ def column_statistics(
                          if Column(column.name) not in columns_to_ignore]
     statistics: Dict[Column, List[ColumnStatistics]] = defaultdict(list)
     conn = engine.connect()
-    for column, statistic in _set_valued_statistics(
+    for column, set_statistic in _set_valued_statistics(
             conn, table,
             [Column(column.name) for column in candidate_columns if
              type(column.type) in SET_VALUED_TYPES]):
-        statistics[column].append(statistic)
-    for column, statistic in _range_valued_statistics(
+        statistics[column].append(set_statistic)
+    for column, range_statistic in _range_valued_statistics(
             conn, table,
             [Column(column.name) for column in candidate_columns if
              type(column.type) in RANGE_VALUED_TYPES]):
-        statistics[column].append(statistic)
+        statistics[column].append(range_statistic)
     return statistics
