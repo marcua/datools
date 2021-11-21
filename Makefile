@@ -84,3 +84,7 @@ dist: clean ## builds source and wheel package
 
 install: clean ## install the package to the active Python's site-packages
 	python setup.py install
+
+jupyter-examples:
+	# Kill after 2 hours so it's not running forever
+	timeout 2h jupyter-lab --allow-root --port $(PORT) --ip $(HOST) examples/
