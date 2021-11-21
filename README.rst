@@ -5,13 +5,15 @@ Data tools
 
 .. image:: https://img.shields.io/pypi/v/datools.svg
         :target: https://pypi.python.org/pypi/datools
-
-.. image:: https://img.shields.io/travis/marcua/datools.svg
-        :target: https://travis-ci.com/marcua/datools
-
+        :alt: PyPi link
+        
+.. image:: https://github.com/marcua/datools/actions/workflows/python-tests.yml/badge.svg
+        :target: https://github.com/marcua/datools/actions/workflows/python-tests.yml
+        :alt: Build status
+        
 .. image:: https://readthedocs.org/projects/datools/badge/?version=latest
         :target: https://datools.readthedocs.io/en/latest/?version=latest
-        :alt: Documentation Status
+        :alt: Documentation status
 
 
 
