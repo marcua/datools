@@ -20,7 +20,7 @@ def generate_scorpion_testdb() -> Engine:
     """
     engine = create_engine('sqlite://')
     conn = engine.connect()
-    metadata = MetaData()
+    metadata = MetaData(engine)
     sensor_readings = Table(
         'sensor_readings', metadata,
         Column('id', Integer, primary_key=True),
@@ -62,8 +62,8 @@ def generate_synthetic_testdb() -> Engine:
     """
     engine = create_engine('sqlite://')
     conn = engine.connect()
-    metadata = MetaData()
-    sensor_readings = Table(
+    metadata = MetaData(engine)
+    synthetic_data = Table(
         'synthetic_data', metadata,
         Column('id', Integer, primary_key=True),
         Column('same_datetime', DateTime, nullable=False),
@@ -97,7 +97,7 @@ def generate_synthetic_testdb() -> Engine:
                 bucket * 1000 + row,
                 row
             ))
-    conn.execute(sensor_readings.insert(), [
+    conn.execute(synthetic_data.insert(), [
         dict(zip(
             ('same_datetime', 'unique_datetime', 'bucket_unique_datetime',
              'same_string', 'unique_string', 'bucket_unique_string',
