@@ -69,9 +69,9 @@ class RangeValuedStatistics(ColumnStatistics):
             f'{[minimum for minimum in self.bucket_minimums]})')
 
 
-def _set_valued_statistics(
-        conn: sqlalchemy.engine.Connection,
-        table: Table,
+def set_valued_statistics(
+        engine: sqlalchemy.engine.Engine,
+        query: str,
         columns: List[Column]
 ) -> Generator[Tuple[Column, SetValuedStatistics], None, None]:
     clauses: List[str] = []
@@ -79,27 +79,35 @@ def _set_valued_statistics(
         clauses.append(
             f'COUNT(DISTINCT {column.name})'
             f'AS {column.name}_distinct_values')
-    results = list(conn.execute(
-        f'SELECT {", ".join(clauses)} FROM {table.name}'))[0]
+    results = engine.execute(
+        f'WITH query AS ( '
+        f'{query}'
+        f')'
+        f'SELECT {", ".join(clauses)} FROM query')
+    count_statistics = list(results)[0]
+    results.close()
     for column in columns:
-        values = [
-            row[column.name] for row in
-            conn.execute(
+        results = engine.execute(
+                f'WITH query AS ( '
+                f'{query}'
+                f')'
                 f'SELECT {column.name}, COUNT(*) AS num_rows '
-                f'FROM {table.name} '
+                f'FROM query '
                 f'GROUP BY {column.name} '
                 f'ORDER BY num_rows DESC, {column.name} '
-                f'LIMIT {MAX_SET_VALUES_TO_INCLUDE}')]
+                f'LIMIT {MAX_SET_VALUES_TO_INCLUDE}')
+        values = [row[column.name] for row in results]
+        results.close()
         yield (
             column,
             SetValuedStatistics(
-                results[f'{column.name}_distinct_values'],
+                count_statistics[f'{column.name}_distinct_values'],
                 values))
 
 
-def _range_valued_statistics(
-        conn: sqlalchemy.engine.Connection,
-        table: Table,
+def range_valued_statistics(
+        engine: sqlalchemy.engine.Engine,
+        query: str,
         columns: List[Column]
 ) -> Generator[Tuple[Column, RangeValuedStatistics], None, None]:
     bucket_clauses: List[str] = []
@@ -115,10 +123,14 @@ def _range_valued_statistics(
             f' ORDER BY {column.name} ASC '
             f' RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) '
             f'AS {column.name}_bucket_value')
-    results = conn.execute(
-        f'WITH buckets AS ( '
+
+    results = engine.execute(
+        f'WITH query AS ( '
+        f'{query}'
+        f'), '
+        f'buckets AS ( '
         f'SELECT {", ".join(bucket_clauses)} '
-        f'FROM {table.name} '
+        f'FROM query '
         f')'
         f'SELECT {", ".join(first_clauses)} '
         f'FROM buckets ')
@@ -133,6 +145,7 @@ def _range_valued_statistics(
     for row in results:
         for column in columns:
             column_values[column].add(row[f'{column.name}_bucket_value'])
+    results.close()
     for column in columns:
         yield (
             column,
@@ -150,14 +163,15 @@ def column_statistics(
     candidate_columns = [column for column in table_metadata.columns
                          if Column(column.name) not in columns_to_ignore]
     statistics: Dict[Column, List[ColumnStatistics]] = defaultdict(list)
-    conn = engine.connect()
-    for column, set_statistic in _set_valued_statistics(
-            conn, table,
+    for column, set_statistic in set_valued_statistics(
+            engine,
+            f'SELECT * FROM {table.name}',
             [Column(column.name) for column in candidate_columns if
              type(column.type) in SET_VALUED_TYPES]):
         statistics[column].append(set_statistic)
-    for column, range_statistic in _range_valued_statistics(
-            conn, table,
+    for column, range_statistic in range_valued_statistics(
+            engine,
+            f'SELECT * FROM {table.name}',
             [Column(column.name) for column in candidate_columns if
              type(column.type) in RANGE_VALUED_TYPES]):
         statistics[column].append(range_statistic)

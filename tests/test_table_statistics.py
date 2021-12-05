@@ -13,7 +13,10 @@ def test_table_statistics():
     values each.
     """
     engine = generate_synthetic_testdb()
-    statistics = column_statistics(engine, Table('synthetic_data'), {})
+    statistics = column_statistics(
+        engine,
+        Table('synthetic_data'),
+        {})
     assert {
         Column('id'):
             [SetValuedStatistics(171, list(range(1, 101))),
