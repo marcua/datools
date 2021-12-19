@@ -11,13 +11,12 @@ from typing import Set
 from typing import Tuple
 
 from datools.errors import DatoolsError
-from datools.models import Aggregate
 from datools.models import Column
 from datools.models import Constant
 from datools.models import Explanation
 from datools.models import Operator
 from datools.models import Predicate
-from datools.models import Table
+from datools.models import OPERATOR_TO_SQL
 from datools.sqlalchemy_utils import GROUP_COLUMNS_KEY
 from datools.sqlalchemy_utils import GROUPING_ID_KEY
 from datools.sqlalchemy_utils import GROUPING_SETS_KEY
@@ -27,36 +26,6 @@ from datools.sqlalchemy_utils import query_columns
 from datools.sqlalchemy_utils import query_rows
 from datools.table_statistics import range_valued_statistics
 from datools.table_statistics import RangeValuedStatistics
-from datools.table_statistics import SetValuedStatistics
-
-
-def _single_column_candidate_predicates(
-        engine: sqlalchemy.engine.Engine,
-        table: Table,
-        group_bys: Tuple[Column, ...],
-        aggregate: Aggregate,
-) -> Generator[Tuple[Predicate, ...], None, None]:
-    """Based on column statistics for range- and set-valued columns,
-    returns a list of predicates that either filter on ranges (i.e.,
-    lower <= column AND column < higher) or equality (i.e., column =
-    constant). These candidates can be tested as outlier explanations.
-
-    :returns: A tuple representing a conjunction of
-              predicates (e.g., predicate1 AND predicate2).
-    """
-    columns_to_ignore: Set[Column] = {group_by for group_by in group_bys}
-    columns_to_ignore.add(aggregate.column)
-    statistics = column_statistics(engine, table, columns_to_ignore)
-    for column, statistics_list in statistics.items():
-        for statistic in statistics_list:
-            if isinstance(statistic, SetValuedStatistics):
-                yield from ((Predicate(
-                    column,
-                    Operator.EQUALS,
-                    Constant(value)), ) for value in statistic.popular_values)
-            elif isinstance(statistic, RangeValuedStatistics):
-                if len(statistic.bucket_minimums) == 1:
-                    continue
 
 
 def _rewrite_query_with_ranges_as_buckets(
@@ -83,10 +52,19 @@ def _rewrite_query_with_ranges_as_buckets(
 
     # Create a CASE statement for each bucket column that converts
     # each range within that column into a single bucketed value.
-    # TODO(marcua)
+    cases = []
+    for column, column_predicates in bucket_predicates.items():
+        whens = []
+        for index, predicate_group in enumerate(column_predicates):
+            clause = ' AND '.join(
+                f'{predicate.left} {OPERATOR_TO_SQL[predicate.operator]} '
+                f'{predicate.right}' for predicate in predicate_group)
+            whens.append(f'WHEN {clause} THEN {index}')
+        when_lines = '\n'.join(whens)
+        cases.append(f'CASE {when_lines} END AS {column.name}')
 
     # Generate SQL.
-    # TODO(marcua)
+    case_lines = ',\n'.join(cases)
     return dedent(
         f'''
         WITH query AS (
@@ -94,14 +72,15 @@ def _rewrite_query_with_ranges_as_buckets(
         )
         SELECT
             query.*,
-            {cases}
+            {case_lines}
+        FROM query
         '''), bucket_predicates
 
 
 def _explanation_counts_query(
         engine: sqlalchemy.engine.Engine,
         relation: str,
-        on_columns: Tuple[Column, ...],
+        on_columns: Set[Column],
         min_support_rows: int = None
 ) -> Tuple[str, Dict[int, Tuple[Column, ...]]]:
     explanation_query = dedent(
@@ -134,7 +113,7 @@ def _diff_query(
         control_explanations_query: str,
         num_test_rows: float,
         num_control_rows: float,
-        on_columns: Tuple[Column, ...],
+        on_columns: Set[Column],
         min_risk_ratio: float
 ) -> str:
     join_conditions = (
@@ -216,11 +195,11 @@ def diff(
                              as `test_relation`) that contains a control
                              group of rows that are different from/a
                              baseline for `test_relation`.
-    :param on_column_values: A list of columns that might contain a specific
+    :param on_column_values: A set of columns that might contain a specific
                        value that explains the difference between
                        test and control. Example: the column `sensor_id`
                        might contain a specific sensor's ID that is the
-    :param on_column_ranges: A list of columns that might contain a range of
+    :param on_column_ranges: A set of columns that might contain a range of
                        values that explains the difference between
                        test and control. Example: the column `timestamp`
                        might contain a date/time range that is the
@@ -250,7 +229,7 @@ def diff(
             'test_relation and control_relation have different schemas')
 
     # Ensure on_columns are a subset of the test/control columns.
-    on_column_names = ({column.name for column in on_column_values} +
+    on_column_names = ({column.name for column in on_column_values} |
                        {column.name for column in on_column_ranges})
     if on_column_names - set(test_column_names):
         raise DatoolsError('on_columns is not a subset of test_relation')
@@ -272,7 +251,7 @@ def diff(
 
     # GROUP BY all test_relation columns, remove ones with a size less
     # than min_support_rows.
-    on_columns = (on_column_values +
+    on_columns = (on_column_values |
                   {column for column in test_bucket_predicates.keys()})
     test_explanations_query, grouping_set_index = _explanation_counts_query(
         engine, test_relation, on_columns, min_support_rows)
@@ -288,7 +267,7 @@ def diff(
     for row in result:
         predicates = []
         for column in grouping_set_index[row.grouping_id]:
-            if column.name in on_column_values:
+            if column in on_column_values:
                 predicates.append(Predicate(
                     column, Operator.EQUALS, row[column.name]))
             else:

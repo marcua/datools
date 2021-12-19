@@ -14,6 +14,16 @@ Operator = Enum(
     'EQUALS NOT_EQUALS GT LT GTEQ LTEQ')
 
 
+OPERATOR_TO_SQL = {
+    Operator.EQUALS: '=',
+    Operator.NOT_EQUALS: '<>',
+    Operator.GT: '>',
+    Operator.LT: '<',
+    Operator.GTEQ: '>=',
+    Operator.LTEQ: '<=',
+}
+
+
 @dataclass
 class Column:
     name: str

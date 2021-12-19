@@ -108,7 +108,7 @@ def set_valued_statistics(
 def range_valued_statistics(
         engine: sqlalchemy.engine.Engine,
         query: str,
-        columns: List[Column]
+        columns: Set[Column]
 ) -> Generator[Tuple[Column, RangeValuedStatistics], None, None]:
     bucket_clauses: List[str] = []
     first_clauses: List[str] = []
@@ -124,33 +124,35 @@ def range_valued_statistics(
             f' RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) '
             f'AS {column.name}_bucket_value')
 
-    results = engine.execute(
-        f'WITH query AS ( '
-        f'{query}'
-        f'), '
-        f'buckets AS ( '
-        f'SELECT {", ".join(bucket_clauses)} '
-        f'FROM query '
-        f')'
-        f'SELECT {", ".join(first_clauses)} '
-        f'FROM buckets ')
-    # The output of the window function is the number of rows in the
-    # input rather than the number of range buckets. Because we have a
-    # single query across multiple columns, we can't `GROUP BY
-    # column_name_bucket` and get the `MIN` NTILE value for each
-    # bucket. Since sqlite doesn't support CUBE/ROLLUP/GROUPING SETS,
-    # we do this grouping manually by creating a `set` of the
-    # `first_value` for each bucket.
-    column_values: Dict[Column, Set[Any]] = defaultdict(set)
-    for row in results:
+    if bucket_clauses:
+        results = engine.execute(
+            f'WITH query AS ( '
+            f'{query}'
+            f'), '
+            f'buckets AS ( '
+            f'SELECT {", ".join(bucket_clauses)} '
+            f'FROM query '
+            f')'
+            f'SELECT {", ".join(first_clauses)} '
+            f'FROM buckets ')
+        # The output of the window function is the number of rows in the
+        # input rather than the number of range buckets. Because we have a
+        # single query across multiple columns, we can't `GROUP BY
+        # column_name_bucket` and get the `MIN` NTILE value for each
+        # bucket. Since sqlite doesn't support CUBE/ROLLUP/GROUPING SETS,
+        # we do this grouping manually by creating a `set` of the
+        # `first_value` for each bucket.
+        column_values: Dict[Column, Set[Any]] = defaultdict(set)
+        for row in results:
+            for column in columns:
+                column_values[column].add(row[f'{column.name}_bucket_value'])
+        results.close()
         for column in columns:
-            column_values[column].add(row[f'{column.name}_bucket_value'])
-    results.close()
-    for column in columns:
-        yield (
-            column,
-            RangeValuedStatistics(sorted(column_values[column])))
-
+            yield (
+                column,
+                RangeValuedStatistics(sorted(column_values[column])))
+    # In case `columns` is empty.
+    yield from ()
 
 def column_statistics(
         engine: sqlalchemy.engine.Engine,
