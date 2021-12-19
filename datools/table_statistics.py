@@ -4,7 +4,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 from typing import Dict
-from typing import Generator
 from typing import List
 from typing import Tuple
 from typing import Set
@@ -73,7 +72,7 @@ def set_valued_statistics(
         engine: sqlalchemy.engine.Engine,
         query: str,
         columns: Set[Column]
-) -> Generator[Tuple[Column, SetValuedStatistics], None, None]:
+) -> List[Tuple[Column, SetValuedStatistics]]:
     clauses: List[str] = []
     for column in columns:
         clauses.append(
@@ -86,6 +85,7 @@ def set_valued_statistics(
         f'SELECT {", ".join(clauses)} FROM query')
     count_statistics = list(results)[0]
     results.close()
+    statistics: List[Tuple[Column, SetValuedStatistics]] = []
     for column in columns:
         results = engine.execute(
                 f'WITH query AS ( '
@@ -98,18 +98,19 @@ def set_valued_statistics(
                 f'LIMIT {MAX_SET_VALUES_TO_INCLUDE}')
         values = [row[column.name] for row in results]
         results.close()
-        yield (
+        statistics.append((
             column,
             SetValuedStatistics(
                 count_statistics[f'{column.name}_distinct_values'],
-                values))
+                values)))
+    return statistics
 
 
 def range_valued_statistics(
         engine: sqlalchemy.engine.Engine,
         query: str,
         columns: Set[Column]
-) -> Generator[Tuple[Column, RangeValuedStatistics], None, None]:
+) -> List[Tuple[Column, RangeValuedStatistics]]:
     bucket_clauses: List[str] = []
     first_clauses: List[str] = []
     for column in columns:
@@ -124,6 +125,7 @@ def range_valued_statistics(
             f' RANGE BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) '
             f'AS {column.name}_bucket_value')
 
+    statistics: List[Tuple[Column, RangeValuedStatistics]] = []
     if bucket_clauses:
         results = engine.execute(
             f'WITH query AS ( '
@@ -148,11 +150,10 @@ def range_valued_statistics(
                 column_values[column].add(row[f'{column.name}_bucket_value'])
         results.close()
         for column in columns:
-            yield (
+            statistics.append((
                 column,
-                RangeValuedStatistics(sorted(column_values[column])))
-    # In case `columns` is empty.
-    yield from ()
+                RangeValuedStatistics(sorted(column_values[column]))))
+    return statistics
 
 
 def column_statistics(

@@ -5,7 +5,6 @@ from math import floor
 from textwrap import dedent
 from textwrap import indent
 from typing import Dict
-from typing import Generator
 from typing import List
 from typing import Set
 from typing import Tuple
@@ -30,8 +29,7 @@ from datools.table_statistics import RangeValuedStatistics
 
 def _rewrite_query_with_ranges_as_buckets(
         query: str,
-        range_statistics: Generator[
-            Tuple[Column, RangeValuedStatistics], None, None]
+        range_statistics: List[Tuple[Column, RangeValuedStatistics]]
 ) -> Tuple[str, Dict[Column, List[Tuple[Predicate, ...]]]]:
     # For each of the columns we've got range predicates on, create a
     # proxy column for the bucketed range values.
@@ -58,21 +56,23 @@ def _rewrite_query_with_ranges_as_buckets(
         whens = []
         for index, predicate_group in enumerate(column_predicates):
             clause = ' AND '.join(
-                f'{predicate.left} {OPERATOR_TO_SQL[predicate.operator]} '
-                f'{predicate.right}' for predicate in predicate_group)
+                f'{predicate.left.name} {OPERATOR_TO_SQL[predicate.operator]} '
+                f'{predicate.right.value}' for predicate in predicate_group)
             whens.append(f'WHEN {clause} THEN {index}')
         when_lines = '\n'.join(whens)
         cases.append(f'CASE {when_lines} END AS {column.name}')
 
     # Generate SQL.
     case_lines = ',\n'.join(cases)
+    # TODO(marcua): Indent the cases and whens for readability.
+    print(case_lines, 'cl'*100)
     return dedent(
         f'''
         WITH query AS (
             {query}
         )
         SELECT
-            query.*,
+            query.*{',' if case_lines else ''}
             {case_lines}
         FROM query
         '''), bucket_predicates
@@ -250,14 +250,15 @@ def diff(
         _rewrite_query_with_ranges_as_buckets(
             control_relation, range_statistics))
 
+    print(rewritten_test_relation, 'rtl'*100)
     # GROUP BY all test_relation columns, remove ones with a size less
     # than min_support_rows.
     on_columns = (on_column_values |
                   {column for column in test_bucket_predicates.keys()})
     test_explanations_query, grouping_set_index = _explanation_counts_query(
-        engine, test_relation, on_columns, min_support_rows)
+        engine, rewritten_test_relation, on_columns, min_support_rows)
     control_explanations_query, _ = _explanation_counts_query(
-        engine, control_relation, on_columns, min_support_rows=None)
+        engine, rewritten_control_relation, on_columns, min_support_rows=None)
     diff_query = _diff_query(
         test_explanations_query, control_explanations_query,
         num_test_rows, num_control_rows,
