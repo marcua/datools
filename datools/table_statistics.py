@@ -72,7 +72,7 @@ class RangeValuedStatistics(ColumnStatistics):
 def set_valued_statistics(
         engine: sqlalchemy.engine.Engine,
         query: str,
-        columns: List[Column]
+        columns: Set[Column]
 ) -> Generator[Tuple[Column, SetValuedStatistics], None, None]:
     clauses: List[str] = []
     for column in columns:
@@ -154,6 +154,7 @@ def range_valued_statistics(
     # In case `columns` is empty.
     yield from ()
 
+
 def column_statistics(
         engine: sqlalchemy.engine.Engine,
         table: Table,
@@ -168,13 +169,13 @@ def column_statistics(
     for column, set_statistic in set_valued_statistics(
             engine,
             f'SELECT * FROM {table.name}',
-            [Column(column.name) for column in candidate_columns if
-             type(column.type) in SET_VALUED_TYPES]):
+            {Column(column.name) for column in candidate_columns if
+             type(column.type) in SET_VALUED_TYPES}):
         statistics[column].append(set_statistic)
     for column, range_statistic in range_valued_statistics(
             engine,
             f'SELECT * FROM {table.name}',
-            [Column(column.name) for column in candidate_columns if
-             type(column.type) in RANGE_VALUED_TYPES]):
+            {Column(column.name) for column in candidate_columns if
+             type(column.type) in RANGE_VALUED_TYPES}):
         statistics[column].append(range_statistic)
     return statistics

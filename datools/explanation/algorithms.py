@@ -30,7 +30,8 @@ from datools.table_statistics import RangeValuedStatistics
 
 def _rewrite_query_with_ranges_as_buckets(
         query: str,
-        range_statistics: Generator[Tuple[Column, RangeValuedStatistics], None, None]
+        range_statistics: Generator[
+            Tuple[Column, RangeValuedStatistics], None, None]
 ) -> Tuple[str, Dict[Column, List[Tuple[Predicate, ...]]]]:
     # For each of the columns we've got range predicates on, create a
     # proxy column for the bucketed range values.
