@@ -72,12 +72,11 @@ def _rewrite_query_with_ranges_as_buckets(
                 f'{predicate.left.name} {OPERATOR_TO_SQL[predicate.operator]} '
                 f'{predicate.right.value}' for predicate in predicate_group)
             whens.append(f'WHEN {clause} THEN {index}')
-        when_lines = '\n'.join(whens)
-        cases.append(f'CASE {when_lines} END AS {column.name}')
+        when_lines = indent(f'\n'.join(whens), 4 * INDENT)
+        cases.append(f'CASE\n{when_lines}\nEND AS {column.name}')
 
     # Generate SQL.
     case_lines = ',\n'.join(cases)
-    # TODO(marcua): Indent the cases and whens for readability.
     return dedent(
         f'''
         WITH query AS (
