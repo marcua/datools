@@ -5,7 +5,7 @@ from datools.models import Constant
 from datools.models import Explanation
 from datools.models import Operator
 from datools.models import Predicate
-from datools.explanation.algorithms import diff
+from datools.explanations import diff
 from .fixtures import generate_scorpion_testdb
 
 
