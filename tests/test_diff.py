@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from datools.models import Column
+from datools.models import Constant
 from datools.models import Explanation
 from datools.models import Operator
 from datools.models import Predicate
@@ -21,7 +22,10 @@ def test_diff():
         2.0,
         1)
     assert(candidates == [
-        Explanation((Predicate(Column('voltage'), Operator.EQUALS, 2.3), ),
-                    risk_ratio=9.0),
-        Explanation((Predicate(Column('sensor_id'), Operator.EQUALS, '3'), ),
-                    risk_ratio=5 + (1.0 / 3))])
+        Explanation(
+            (Predicate(
+                Column('voltage'), Operator.EQUALS, Constant(2.3)), ),
+            risk_ratio=9.0),
+        Explanation(
+            (Predicate(Column('sensor_id'), Operator.EQUALS, Constant('3')), ),
+            risk_ratio=5 + (1.0 / 3))])

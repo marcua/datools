@@ -56,7 +56,9 @@ def _rewrite_query_with_ranges_as_buckets(
                 bucket_predicates[bucket_column].append((second_predicate, ))
             elif first is not None and second is None:
                 bucket_predicates[bucket_column].append((first_predicate, ))
-            else:
+            # Don't allow a 1-bucket degenerate case (`first` and `second`
+            # are empty).
+            elif first is not None and second is not None:
                 bucket_predicates[bucket_column].append(
                     (first_predicate, second_predicate))
 
