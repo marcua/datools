@@ -27,6 +27,9 @@ from datools.table_statistics import range_valued_statistics
 from datools.table_statistics import RangeValuedStatistics
 
 
+NUM_RANGE_BUCKETS = 15
+
+
 def _rewrite_query_with_ranges_as_buckets(
         query: str,
         range_statistics: List[Tuple[Column, RangeValuedStatistics]]
@@ -36,18 +39,26 @@ def _rewrite_query_with_ranges_as_buckets(
     bucket_predicates: Dict[Column, List[Tuple[Predicate, ...]]] = defaultdict(
         list)
     for column, statistic in range_statistics:
-        pairs = zip(statistic.bucket_minimums,
+        # If the bucket minimums in the statistics are (a, b, c),
+        # we want to generate the following ranges:
+        # * < b [we leave out a in case the control relation
+        #        has smaller values than the test relation]
+        # * >= b, < c [values in the middle bucket]
+        # * >= c [the largest bucket has a minimum of c]
+        pairs = zip([None] + statistic.bucket_minimums[1:],
                     statistic.bucket_minimums[1:] + [None])
         for first, second in pairs:
             bucket_column = Column(f'{column.name}__bucket')
             first_predicate = Predicate(
                 column, Operator.GTEQ, Constant(first))
-            if second is None:
+            second_predicate = Predicate(column, Operator.LT, Constant(second))
+            if first is None and second is not None:
+                bucket_predicates[bucket_column].append((second_predicate, ))
+            elif first is not None and second is None:
                 bucket_predicates[bucket_column].append((first_predicate, ))
             else:
                 bucket_predicates[bucket_column].append(
-                    (first_predicate,
-                     Predicate(column, Operator.LT, Constant(second))))
+                    (first_predicate, second_predicate))
 
     # Create a CASE statement for each bucket column that converts
     # each range within that column into a single bucketed value.
@@ -65,7 +76,6 @@ def _rewrite_query_with_ranges_as_buckets(
     # Generate SQL.
     case_lines = ',\n'.join(cases)
     # TODO(marcua): Indent the cases and whens for readability.
-    print(case_lines, 'cl'*100)
     return dedent(
         f'''
         WITH query AS (
@@ -242,7 +252,8 @@ def diff(
 
     # Transform ranges in on_column_ranges into bucket IDs.
     range_statistics = range_valued_statistics(
-        engine, test_relation, on_column_ranges)
+        engine, test_relation, on_column_ranges,
+        num_buckets=NUM_RANGE_BUCKETS)
     rewritten_test_relation, test_bucket_predicates = (
         _rewrite_query_with_ranges_as_buckets(
             test_relation, range_statistics))
@@ -250,7 +261,6 @@ def diff(
         _rewrite_query_with_ranges_as_buckets(
             control_relation, range_statistics))
 
-    print(rewritten_test_relation, 'rtl'*100)
     # GROUP BY all test_relation columns, remove ones with a size less
     # than min_support_rows.
     on_columns = (on_column_values |
@@ -271,7 +281,7 @@ def diff(
         for column in grouping_set_index[row.grouping_id]:
             if column in on_column_values:
                 predicates.append(Predicate(
-                    column, Operator.EQUALS, row[column.name]))
+                    column, Operator.EQUALS, Constant(row[column.name])))
             else:
                 # Turn the proxy range bucket column back into a predicate on
                 # the range-valued column.

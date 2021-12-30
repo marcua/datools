@@ -52,6 +52,10 @@ class Predicate:
     operator: Operator
     right: Constant
 
+    def __repr__(self):
+        return (f'Predicate({self.left.name} '
+                f'{self.operator.name} {self.right.value})')
+
 
 @dataclass
 class Table:

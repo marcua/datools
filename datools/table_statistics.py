@@ -12,8 +12,6 @@ from datools.models import Column
 from datools.models import Table
 
 
-MAX_SET_VALUES_TO_INCLUDE = 100
-RANGE_BUCKETS = 3
 RANGE_VALUED_TYPES = {
     sqlalchemy.sql.sqltypes.BIGINT,
     sqlalchemy.sql.sqltypes.DATE,
@@ -46,16 +44,17 @@ class ColumnStatistics:
 @dataclass
 class SetValuedStatistics(ColumnStatistics):
     distinct_values: int
-    popular_values: list
+    most_common_values: list
 
     def __repr__(self):
         return (
             f'SetValuedStatistics(distinct_values: {self.distinct_values}, '
-            f'popular_values: {self.popular_values})')
+            f'most_common_values: {self.most_common_values})')
 
     def __eq__(self, other):
         return (self.distinct_values == other.distinct_values
-                and set(self.popular_values) == set(other.popular_values))
+                and (set(self.most_common_values) ==
+                     set(other.most_common_values)))
 
 
 @dataclass
@@ -71,7 +70,8 @@ class RangeValuedStatistics(ColumnStatistics):
 def set_valued_statistics(
         engine: sqlalchemy.engine.Engine,
         query: str,
-        columns: Set[Column]
+        columns: Set[Column],
+        num_most_common_values: int = 100
 ) -> List[Tuple[Column, SetValuedStatistics]]:
     clauses: List[str] = []
     for column in columns:
@@ -95,7 +95,7 @@ def set_valued_statistics(
                 f'FROM query '
                 f'GROUP BY {column.name} '
                 f'ORDER BY num_rows DESC, {column.name} '
-                f'LIMIT {MAX_SET_VALUES_TO_INCLUDE}')
+                f'LIMIT {num_most_common_values}')
         values = [row[column.name] for row in results]
         results.close()
         statistics.append((
@@ -109,14 +109,15 @@ def set_valued_statistics(
 def range_valued_statistics(
         engine: sqlalchemy.engine.Engine,
         query: str,
-        columns: Set[Column]
+        columns: Set[Column],
+        num_buckets: int = 3
 ) -> List[Tuple[Column, RangeValuedStatistics]]:
     bucket_clauses: List[str] = []
     first_clauses: List[str] = []
     for column in columns:
         bucket_clauses.append(
             f'{column.name}, '
-            f'NTILE({RANGE_BUCKETS}) OVER (ORDER BY {column.name} ASC) '
+            f'NTILE({num_buckets}) OVER (ORDER BY {column.name} ASC) '
             f'AS {column.name}_bucket')
         first_clauses.append(
             f'first_value({column.name}) OVER '
@@ -147,7 +148,12 @@ def range_valued_statistics(
         column_values: Dict[Column, Set[Any]] = defaultdict(set)
         for row in results:
             for column in columns:
-                column_values[column].add(row[f'{column.name}_bucket_value'])
+                value = row[f'{column.name}_bucket_value']
+                # Some engines (e.g., SQLite) happily store strings in
+                # numeric columns, so we have to be a bit defensive of
+                # the values we get back.
+                if column is not None and not value == '':
+                    column_values[column].add(value)
         results.close()
         for column in columns:
             statistics.append((
@@ -159,7 +165,7 @@ def range_valued_statistics(
 def column_statistics(
         engine: sqlalchemy.engine.Engine,
         table: Table,
-        columns_to_ignore: Set[Column]
+        columns_to_ignore: Set[Column],
 ) -> Dict[Column, List[ColumnStatistics]]:
     metadata = sqlalchemy.MetaData()
     table_metadata = sqlalchemy.Table(
