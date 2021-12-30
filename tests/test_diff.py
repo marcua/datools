@@ -17,7 +17,7 @@ def test_diff():
         'SELECT * FROM sensor_readings WHERE temperature <= 50',
         {Column('created_at'), Column('sensor_id'), Column('voltage'),
          Column('humidity')},
-        {Column('voltage')},
+        {Column('voltage'), Column('humidity')},
         0.05,
         2.0,
         1)
