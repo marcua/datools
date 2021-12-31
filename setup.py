@@ -15,7 +15,6 @@ requirements = [
     'dataclasses; python_version<"3.7"',
     'sqlalchemy==1.4.17',
     'tabulate==0.8.9',
-    'duckdb-engine==0.1.7'
 ]
 
 setup_requirements = ['pytest-runner', ]
