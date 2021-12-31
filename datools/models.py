@@ -14,6 +14,16 @@ Operator = Enum(
     'EQUALS NOT_EQUALS GT LT GTEQ LTEQ')
 
 
+OPERATOR_TO_SQL = {
+    Operator.EQUALS: '=',
+    Operator.NOT_EQUALS: '<>',
+    Operator.GT: '>',
+    Operator.LT: '<',
+    Operator.GTEQ: '>=',
+    Operator.LTEQ: '<=',
+}
+
+
 @dataclass
 class Column:
     name: str
@@ -41,6 +51,13 @@ class Predicate:
     left: Column
     operator: Operator
     right: Constant
+
+    def to_sql(self):
+        return (f'{self.left.name} '
+                f'{OPERATOR_TO_SQL[self.operator]} {self.right.value}')
+
+    def __repr__(self):
+        return f'Predicate({self.to_sql()})'
 
 
 @dataclass

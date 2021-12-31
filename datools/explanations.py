@@ -1,22 +1,20 @@
 import sqlalchemy
 
+from collections import defaultdict
 from math import floor
 from textwrap import dedent
 from textwrap import indent
 from typing import Dict
-from typing import Generator
 from typing import List
 from typing import Set
 from typing import Tuple
 
 from datools.errors import DatoolsError
-from datools.models import Aggregate
 from datools.models import Column
 from datools.models import Constant
 from datools.models import Explanation
 from datools.models import Operator
 from datools.models import Predicate
-from datools.models import Table
 from datools.sqlalchemy_utils import GROUP_COLUMNS_KEY
 from datools.sqlalchemy_utils import GROUPING_ID_KEY
 from datools.sqlalchemy_utils import GROUPING_SETS_KEY
@@ -24,54 +22,75 @@ from datools.sqlalchemy_utils import INDENT
 from datools.sqlalchemy_utils import grouping_sets_query
 from datools.sqlalchemy_utils import query_columns
 from datools.sqlalchemy_utils import query_rows
-from datools.table_statistics import column_statistics
+from datools.table_statistics import range_valued_statistics
 from datools.table_statistics import RangeValuedStatistics
-from datools.table_statistics import SetValuedStatistics
 
 
-def _single_column_candidate_predicates(
-        engine: sqlalchemy.engine.Engine,
-        table: Table,
-        group_bys: Tuple[Column, ...],
-        aggregate: Aggregate,
-) -> Generator[Tuple[Predicate, ...], None, None]:
-    """Based on column statistics for range- and set-valued columns,
-    returns a list of predicates that either filter on ranges (i.e.,
-    lower <= column AND column < higher) or equality (i.e., column =
-    constant). These candidates can be tested as outlier explanations.
+NUM_RANGE_BUCKETS = 15
 
-    :returns: A tuple representing a conjunction of
-              predicates (e.g., predicate1 AND predicate2).
-    """
-    columns_to_ignore: Set[Column] = {group_by for group_by in group_bys}
-    columns_to_ignore.add(aggregate.column)
-    statistics = column_statistics(engine, table, columns_to_ignore)
-    for column, statistics_list in statistics.items():
-        for statistic in statistics_list:
-            if isinstance(statistic, SetValuedStatistics):
-                yield from ((Predicate(
-                    column,
-                    Operator.EQUALS,
-                    Constant(value)), ) for value in statistic.popular_values)
-            elif isinstance(statistic, RangeValuedStatistics):
-                if len(statistic.bucket_minimums) == 1:
-                    continue
-                pairs = zip(statistic.bucket_minimums,
-                            statistic.bucket_minimums[1:] + [None])
-                for first, second in pairs:
-                    first_predicate = Predicate(
-                        column, Operator.GTEQ, Constant(first))
-                    if second is None:
-                        yield (first_predicate, )
-                    yield (
-                        first_predicate,
-                        Predicate(column, Operator.LT, Constant(second)))
+
+def _rewrite_query_with_ranges_as_buckets(
+        query: str,
+        range_statistics: List[Tuple[Column, RangeValuedStatistics]]
+) -> Tuple[str, Dict[Column, List[Tuple[Predicate, ...]]]]:
+    # For each of the columns we've got range predicates on, create a
+    # proxy column for the bucketed range values.
+    bucket_predicates: Dict[Column, List[Tuple[Predicate, ...]]] = defaultdict(
+        list)
+    for column, statistic in range_statistics:
+        # If the bucket minimums in the statistics are (a, b, c),
+        # we want to generate the following ranges:
+        # * < b [we leave out a in case the control relation
+        #        has smaller values than the test relation]
+        # * >= b, < c [values in the middle bucket]
+        # * >= c [the largest bucket has a minimum of c]
+        pairs = zip([None] + statistic.bucket_minimums[1:],
+                    statistic.bucket_minimums[1:] + [None])
+        for first, second in pairs:
+            bucket_column = Column(f'{column.name}__bucket')
+            first_predicate = Predicate(
+                column, Operator.GTEQ, Constant(first))
+            second_predicate = Predicate(column, Operator.LT, Constant(second))
+            if first is None and second is not None:
+                bucket_predicates[bucket_column].append((second_predicate, ))
+            elif first is not None and second is None:
+                bucket_predicates[bucket_column].append((first_predicate, ))
+            # Don't allow a 1-bucket degenerate case (`first` and `second`
+            # are empty).
+            elif first is not None and second is not None:
+                bucket_predicates[bucket_column].append(
+                    (first_predicate, second_predicate))
+
+    # Create a CASE statement for each bucket column that converts
+    # each range within that column into a single bucketed value.
+    cases = []
+    for column, column_predicates in bucket_predicates.items():
+        whens = []
+        for index, predicate_group in enumerate(column_predicates):
+            clause = ' AND '.join(predicate.to_sql()
+                                  for predicate in predicate_group)
+            whens.append(f'WHEN {clause} THEN {index}')
+        when_lines = indent(f'\n'.join(whens), 4 * INDENT)
+        cases.append(f'CASE\n{when_lines}\nEND AS {column.name}')
+
+    # Generate SQL.
+    case_lines = ',\n'.join(cases)
+    return dedent(
+        f'''
+        WITH query AS (
+            {query}
+        )
+        SELECT
+            query.*{',' if case_lines else ''}
+            {case_lines}
+        FROM query
+        '''), bucket_predicates
 
 
 def _explanation_counts_query(
         engine: sqlalchemy.engine.Engine,
         relation: str,
-        on_columns: Tuple[Column, ...],
+        on_columns: Set[Column],
         min_support_rows: int = None
 ) -> Tuple[str, Dict[int, Tuple[Column, ...]]]:
     explanation_query = dedent(
@@ -104,7 +123,7 @@ def _diff_query(
         control_explanations_query: str,
         num_test_rows: float,
         num_control_rows: float,
-        on_columns: Tuple[Column, ...],
+        on_columns: Set[Column],
         min_risk_ratio: float
 ) -> str:
     join_conditions = (
@@ -156,7 +175,8 @@ def diff(
         engine: sqlalchemy.engine.Engine,
         test_relation: str,
         control_relation: str,
-        on_columns: Tuple[Column, ...],
+        on_column_values: Set[Column],
+        on_column_ranges: Set[Column],
         min_support: float,
         min_risk_ratio: float,
         max_order: int
@@ -185,8 +205,15 @@ def diff(
                              as `test_relation`) that contains a control
                              group of rows that are different from/a
                              baseline for `test_relation`.
-    :param on_columns: A list of columns that might contain an explanation
-                       for the difference between test and control.
+    :param on_column_values: A set of columns that might contain a specific
+                       value that explains the difference between
+                       test and control. Example: the column `sensor_id`
+                       might contain a specific sensor's ID that is the
+    :param on_column_ranges: A set of columns that might contain a range of
+                       values that explains the difference between
+                       test and control. Example: the column `timestamp`
+                       might contain a date/time range that is the
+                       source of outlier readings.
     :param min_support: A value in the range [0, 1] with the minimum fraction
                         of the test set that an explanation should contain.
     :param min_risk_ratio: A positive floating point value with the minimum
@@ -212,8 +239,9 @@ def diff(
             'test_relation and control_relation have different schemas')
 
     # Ensure on_columns are a subset of the test/control columns.
-    on_column_names = tuple(column.name for column in on_columns)
-    if set(on_column_names) - set(test_column_names):
+    on_column_names = ({column.name for column in on_column_values} |
+                       {column.name for column in on_column_ranges})
+    if on_column_names - set(test_column_names):
         raise DatoolsError('on_columns is not a subset of test_relation')
 
     # Get size of test_relation, control_relation.
@@ -221,12 +249,25 @@ def diff(
     num_control_rows = 1.0 * query_rows(engine, control_relation)
     min_support_rows = floor(num_test_rows * min_support)
 
+    # Transform ranges in on_column_ranges into bucket IDs.
+    range_statistics = range_valued_statistics(
+        engine, test_relation, on_column_ranges,
+        num_buckets=NUM_RANGE_BUCKETS)
+    rewritten_test_relation, test_bucket_predicates = (
+        _rewrite_query_with_ranges_as_buckets(
+            test_relation, range_statistics))
+    rewritten_control_relation, control_bucket_predicates = (
+        _rewrite_query_with_ranges_as_buckets(
+            control_relation, range_statistics))
+
     # GROUP BY all test_relation columns, remove ones with a size less
     # than min_support_rows.
+    on_columns = (on_column_values |
+                  {column for column in test_bucket_predicates.keys()})
     test_explanations_query, grouping_set_index = _explanation_counts_query(
-        engine, test_relation, on_columns, min_support_rows)
+        engine, rewritten_test_relation, on_columns, min_support_rows)
     control_explanations_query, _ = _explanation_counts_query(
-        engine, control_relation, on_columns, min_support_rows=None)
+        engine, rewritten_control_relation, on_columns, min_support_rows=None)
     diff_query = _diff_query(
         test_explanations_query, control_explanations_query,
         num_test_rows, num_control_rows,
@@ -235,9 +276,15 @@ def diff(
     result = engine.execute(diff_query)
     explanations = []
     for row in result:
-        predicates = tuple(
-            Predicate(column, Operator.EQUALS, row[column.name])
-            for column in grouping_set_index[row.grouping_id])
-        explanations.append(Explanation(predicates, row.risk_ratio))
+        predicates = []
+        for column in grouping_set_index[row.grouping_id]:
+            if column in on_column_values:
+                predicates.append(Predicate(
+                    column, Operator.EQUALS, Constant(row[column.name])))
+            else:
+                # Turn the proxy range bucket column back into a predicate on
+                # the range-valued column.
+                predicates += test_bucket_predicates[column][row[column.name]]
+        explanations.append(Explanation(tuple(predicates), row.risk_ratio))
     result.close()
     return explanations
