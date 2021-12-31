@@ -12,7 +12,7 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'Click>=7.0',
-    'dataclasses==0.8; python_version<"3.7"',
+    'dataclasses; python_version<"3.7"',
     'sqlalchemy==1.4.17',
     'tabulate==0.8.9',
     'duckdb-engine==0.1.7'
