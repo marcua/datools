@@ -52,9 +52,12 @@ class Predicate:
     operator: Operator
     right: Constant
 
+    def to_sql(self):
+        return (f'{self.left.name} '
+                f'{OPERATOR_TO_SQL[self.operator]} {self.right.value}')
+
     def __repr__(self):
-        return (f'Predicate({self.left.name} '
-                f'{self.operator.name} {self.right.value})')
+        return f'Predicate({self.to_sql()})'
 
 
 @dataclass

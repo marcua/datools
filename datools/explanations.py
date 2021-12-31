@@ -15,7 +15,6 @@ from datools.models import Constant
 from datools.models import Explanation
 from datools.models import Operator
 from datools.models import Predicate
-from datools.models import OPERATOR_TO_SQL
 from datools.sqlalchemy_utils import GROUP_COLUMNS_KEY
 from datools.sqlalchemy_utils import GROUPING_ID_KEY
 from datools.sqlalchemy_utils import GROUPING_SETS_KEY
@@ -68,9 +67,8 @@ def _rewrite_query_with_ranges_as_buckets(
     for column, column_predicates in bucket_predicates.items():
         whens = []
         for index, predicate_group in enumerate(column_predicates):
-            clause = ' AND '.join(
-                f'{predicate.left.name} {OPERATOR_TO_SQL[predicate.operator]} '
-                f'{predicate.right.value}' for predicate in predicate_group)
+            clause = ' AND '.join(predicate.to_sql()
+                                  for predicate in predicate_group)
             whens.append(f'WHEN {clause} THEN {index}')
         when_lines = indent(f'\n'.join(whens), 4 * INDENT)
         cases.append(f'CASE\n{when_lines}\nEND AS {column.name}')
