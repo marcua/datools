@@ -12,10 +12,9 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     'Click>=7.0',
-    'dataclasses==0.8; python_version<"3.7"',
+    'dataclasses; python_version<"3.7"',
     'sqlalchemy==1.4.17',
     'tabulate==0.8.9',
-    'duckdb-engine==0.1.7'
 ]
 
 setup_requirements = ['pytest-runner', ]
@@ -31,10 +30,11 @@ setup(
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
         'Natural Language :: English',
-        'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.6',
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
     ],
     description="Some tools for working with data",
     entry_points={
