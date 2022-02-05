@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from sqlalchemy.engine import Engine
+
 from datools.models import Column
 from datools.models import Constant
 from datools.models import Explanation
@@ -9,10 +11,10 @@ from datools.explanations import diff
 from .fixtures import generate_scorpion_testdb
 
 
-def test_diff():
-    engine = generate_scorpion_testdb()
+def test_diff(db_engine: Engine):
+    generate_scorpion_testdb(db_engine)
     candidates = diff(
-        engine,
+        db_engine,
         'SELECT * FROM sensor_readings WHERE temperature > 50',
         'SELECT * FROM sensor_readings WHERE temperature <= 50',
         {Column('created_at'), Column('sensor_id'), Column('voltage'),

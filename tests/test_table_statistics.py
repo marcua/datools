@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from sqlalchemy.engine import Engine
+
 from datools.models import Column
 from datools.models import Table
 from datools.table_statistics import column_statistics
@@ -8,13 +10,13 @@ from datools.table_statistics import SetValuedStatistics
 from .fixtures import generate_synthetic_testdb
 
 
-def test_table_statistics():
+def test_table_statistics(db_engine):
     """Tests `column_statistics` on synthetic data in 19 buckets with 9
     values each.
     """
-    engine = generate_synthetic_testdb()
+    generate_synthetic_testdb(db_engine)
     statistics = column_statistics(
-        engine,
+        db_engine,
         Table('synthetic_data'),
         {})
     assert {

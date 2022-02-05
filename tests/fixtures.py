@@ -1,6 +1,5 @@
 from datetime import datetime
 
-from sqlalchemy import create_engine
 from sqlalchemy import DateTime
 from sqlalchemy import Float
 from sqlalchemy import Integer
@@ -11,14 +10,13 @@ from sqlalchemy.schema import Column
 from sqlalchemy.schema import Table
 
 
-def generate_scorpion_testdb() -> Engine:
+def generate_scorpion_testdb(engine: Engine):
     """Create a test DB from Table 1 of the Scorpion paper (Wu & Madden,
     VLDB 2013).
 
     Rather than make sensor_id a foreign key, we make it a character
     type to test a wider variety of column types.
     """
-    engine = create_engine('sqlite://')
     conn = engine.connect()
     metadata = MetaData(engine)
     sensor_readings = Table(
@@ -48,10 +46,9 @@ def generate_scorpion_testdb() -> Engine:
             value))
         for value in values
     ])
-    return engine
 
 
-def generate_synthetic_testdb() -> Engine:
+def generate_synthetic_testdb(engine: Engine):
     """Create a synthetic database with several data types and
     distributions.
     For various data types (datetime, integer, string, float), we
@@ -60,7 +57,6 @@ def generate_synthetic_testdb() -> Engine:
     * The same overall (every value is the same)
     * Unique within a bucket (but repeats across buckets).
     """
-    engine = create_engine('sqlite://')
     conn = engine.connect()
     metadata = MetaData(engine)
     synthetic_data = Table(
@@ -105,4 +101,3 @@ def generate_synthetic_testdb() -> Engine:
              'same_int', 'unique_int', 'bucket_unique_int'), value))
         for value in values
     ])
-    return engine
