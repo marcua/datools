@@ -10,7 +10,7 @@ from datools.table_statistics import SetValuedStatistics
 from .fixtures import generate_synthetic_testdb
 
 
-def test_table_statistics(db_engine):
+def test_table_statistics(db_engine: Engine):
     """Tests `column_statistics` on synthetic data in 19 buckets with 9
     values each.
     """
@@ -18,7 +18,7 @@ def test_table_statistics(db_engine):
     statistics = column_statistics(
         db_engine,
         Table('synthetic_data'),
-        {})
+        set())
     assert {
         Column('id'):
             [SetValuedStatistics(171, list(range(1, 101))),
