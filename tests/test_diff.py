@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from pytest import approx
 from sqlalchemy.engine import Engine
 
 from datools.models import Column
@@ -26,7 +27,7 @@ def test_diff(db_engine: Engine):
     assert(candidates == [
         Explanation(
             (Predicate(
-                Column('voltage'), Operator.EQUALS, Constant(2.3)), ),
+                Column('voltage'), Operator.EQUALS, Constant(approx(2.3))), ),
             risk_ratio=9.0),
         Explanation(
             (Predicate(Column('sensor_id'), Operator.EQUALS, Constant('3')), ),
