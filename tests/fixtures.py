@@ -62,7 +62,8 @@ def generate_scorpion_testdb(engine: Engine):
     with engine.connect() as conn:
         conn.execute(sensor_readings.insert(), [
             dict(zip(
-                ('created_at', 'sensor_id', 'voltage', 'humidity', 'temperature'),
+                ('created_at', 'sensor_id',
+                 'voltage', 'humidity', 'temperature'),
                 value))
             for value in values
         ])
