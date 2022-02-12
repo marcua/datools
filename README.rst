@@ -15,20 +15,12 @@ Data tools
         :target: https://datools.readthedocs.io/en/latest/?version=latest
         :alt: Documentation status
 
-
-
-
 Some tools for working with data
 
 
 * Free software: Apache Software License 2.0
 * Documentation: https://datools.readthedocs.io.
 
-
-Features
---------
-
-* TODO
 
 Credits
 -------
