@@ -1,4 +1,4 @@
-Welcome to Data tools's documentation!
+Welcome to the `datools` documentation!
 ======================================
 
 .. toctree::
@@ -7,7 +7,7 @@ Welcome to Data tools's documentation!
 
    readme
    installation
-   usage
+   examples
    modules
    contributing
    authors

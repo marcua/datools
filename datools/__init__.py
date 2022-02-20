@@ -1,4 +1,4 @@
-"""Top-level package for Data tools."""
+"""Top-level package for datools."""
 
 __author__ = """Adam Marcus"""
 __email__ = 'marcua@marcua.net'

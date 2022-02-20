@@ -2,12 +2,7 @@
 Credits
 =======
 
-Development Lead
-----------------
-
+Contributors
 * Adam Marcus <marcua@marcua.net>
 
-Contributors
-------------
-
-None yet. Why not be the first?
+This package was created with [Cookiecutter](https://github.com/audreyr/cookiecutter) and the [audreyr/cookiecutter-pypackage](https://github.com/audreyr/cookiecutter-pypackage) project template.
