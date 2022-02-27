@@ -2,6 +2,14 @@
 History
 =======
 
+0.1.4 (2022-02-27)
+------------------
+* Python 3.10 support.
+* Updated test suite to run tests against multiple databases, in particular expanding from SQLite only to DuckDB and SQLite.
+* As a result of the last bullet, ensured code runs against DuckDB in addition to SQLite.
+* First stab at documentation (https://datools.readthedocs.io/en/latest/).
+
+
 0.1.3 (2021-12-31)
 ------------------
 * Introduced mypy to linting and CI to ensure code that makes it to `main` has proper types.
