@@ -13,27 +13,25 @@ from datools.models import Table
 
 
 RANGE_VALUED_TYPES = {
-    sqlalchemy.sql.sqltypes.BIGINT,
-    sqlalchemy.sql.sqltypes.DATE,
-    sqlalchemy.sql.sqltypes.DATETIME,
-    sqlalchemy.sql.sqltypes.DECIMAL,
-    sqlalchemy.sql.sqltypes.FLOAT,
-    sqlalchemy.sql.sqltypes.INTEGER,
-    sqlalchemy.sql.sqltypes.NUMERIC,
-    sqlalchemy.sql.sqltypes.REAL,
-    sqlalchemy.sql.sqltypes.SMALLINT,
-    sqlalchemy.sql.sqltypes.TIME,
-    sqlalchemy.sql.sqltypes.TIMESTAMP,
+    sqlalchemy.sql.sqltypes.BigInteger,
+    sqlalchemy.sql.sqltypes.Date,
+    sqlalchemy.sql.sqltypes.DateTime,
+    sqlalchemy.sql.sqltypes.Float,
+    sqlalchemy.sql.sqltypes.Integer,
+    sqlalchemy.sql.sqltypes.Interval,
+    sqlalchemy.sql.sqltypes.Numeric,
+    sqlalchemy.sql.sqltypes.SmallInteger,
+    sqlalchemy.sql.sqltypes.Time,
 }
 SET_VALUED_TYPES = {
-    sqlalchemy.sql.sqltypes.BOOLEAN,
-    sqlalchemy.sql.sqltypes.CHAR,
-    sqlalchemy.sql.sqltypes.INTEGER,
-    sqlalchemy.sql.sqltypes.NCHAR,
-    sqlalchemy.sql.sqltypes.NVARCHAR,
-    sqlalchemy.sql.sqltypes.SMALLINT,
-    sqlalchemy.sql.sqltypes.TEXT,
-    sqlalchemy.sql.sqltypes.VARCHAR,
+    sqlalchemy.sql.sqltypes.Boolean,
+    sqlalchemy.sql.sqltypes.Enum,
+    sqlalchemy.sql.sqltypes.Integer,
+    sqlalchemy.sql.sqltypes.SmallInteger,
+    sqlalchemy.sql.sqltypes.String,
+    sqlalchemy.sql.sqltypes.Text,
+    sqlalchemy.sql.sqltypes.Unicode,
+    sqlalchemy.sql.sqltypes.UnicodeText,
 }
 
 
@@ -177,12 +175,12 @@ def column_statistics(
             engine,
             f'SELECT * FROM {table.name}',
             {Column(column.name) for column in candidate_columns if
-             type(column.type) in SET_VALUED_TYPES}):
+             type(column.type.as_generic()) in SET_VALUED_TYPES}):
         statistics[column].append(set_statistic)
     for column, range_statistic in range_valued_statistics(
             engine,
             f'SELECT * FROM {table.name}',
             {Column(column.name) for column in candidate_columns if
-             type(column.type) in RANGE_VALUED_TYPES}):
+             type(column.type.as_generic()) in RANGE_VALUED_TYPES}):
         statistics[column].append(range_statistic)
     return statistics

@@ -13,3 +13,4 @@ pytest-runner==5.1
 mypy==0.910
 jupyterlab==3.2.4
 m2r2==0.3.2
+duckdb-engine==0.1.8

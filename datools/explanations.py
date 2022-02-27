@@ -77,13 +77,13 @@ def _rewrite_query_with_ranges_as_buckets(
     case_lines = ',\n'.join(cases)
     return dedent(
         f'''
-        WITH query AS (
+        WITH original_query AS (
             {query}
         )
         SELECT
-            query.*{',' if case_lines else ''}
+            original_query.*{',' if case_lines else ''}
             {case_lines}
-        FROM query
+        FROM original_query
         '''), bucket_predicates
 
 
