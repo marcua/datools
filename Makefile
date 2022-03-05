@@ -54,6 +54,7 @@ lint: ## check style with flake8 and typecheck with mypy
 test: ## run tests with the default Python
 	pytest --db-type sqlite
 	pytest --db-type duckdb
+	pytest --db-type postgresql
 
 test-all: ## run tests on every Python version with tox
 	tox

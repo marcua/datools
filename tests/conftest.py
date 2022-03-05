@@ -1,12 +1,16 @@
 import pytest
 
-from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
+
+from .db_engine_creators import DuckDbEngineCreator
+from .db_engine_creators import PostgresqlEngineCreator
+from .db_engine_creators import SqliteEngineCreator
 
 
 DB_TYPE_TO_ENGINE_STRING = {
-    'sqlite': 'sqlite://',
-    'duckdb': 'duckdb:///:memory:'
+    'duckdb': DuckDbEngineCreator,
+    'sqlite': SqliteEngineCreator,
+    'postgresql': PostgresqlEngineCreator
 }
 
 
@@ -18,5 +22,6 @@ def pytest_addoption(parser):
 
 @pytest.fixture(scope='function')
 def db_engine(pytestconfig) -> Engine:
-    engine_string = DB_TYPE_TO_ENGINE_STRING[pytestconfig.getoption('db_type')]
-    return create_engine(engine_string)
+    creator = DB_TYPE_TO_ENGINE_STRING[pytestconfig.getoption('db_type')]()
+    yield creator.get_engine()
+    creator.teardown_engine()
