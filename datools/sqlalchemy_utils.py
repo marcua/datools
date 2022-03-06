@@ -116,7 +116,8 @@ def _synthetic_grouping_sets_query(
         grouping_set_names = tuple(column.name for column in grouping_set)
         group_by_columns = ', '.join(grouping_set_names)
         group_by = (
-            f'{"GROUP BY" if len(group_by_columns) else ""} {group_by_columns}')
+            f'{"GROUP BY" if len(group_by_columns) else ""} '
+            f'{group_by_columns}')
         queries.append(
             query
             .replace(grouping_id_key, str(set_id))
