@@ -100,7 +100,7 @@ def _explanation_counts_query(
             {GROUP_COLUMNS_KEY},
             1.0 * COUNT(*) AS explanation_size
         FROM query
-        GROUP BY {GROUPING_SETS_KEY}
+        {GROUPING_SETS_KEY}
         ''')
     if min_support_rows is not None:
         explanation_query += f'HAVING (1.0 * COUNT(*)) > {min_support_rows}\n'
