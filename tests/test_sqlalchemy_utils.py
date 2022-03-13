@@ -1,34 +1,28 @@
 #!/usr/bin/env python
 
 from sqlalchemy.engine import Engine
-from textwrap import dedent
 
+from datools.models import Aggregate
+from datools.models import AggregateFunction
 from datools.models import Column
-from datools.sqlalchemy_utils import GROUP_COLUMNS_KEY
-from datools.sqlalchemy_utils import GROUPING_ID_KEY
-from datools.sqlalchemy_utils import GROUPING_SETS_KEY
 from datools.sqlalchemy_utils import grouping_sets_query
 from .fixtures import generate_scorpion_testdb
+from .utils import engine_based_datetime
 
 
 def test_grouping_sets(db_engine: Engine):
     generate_scorpion_testdb(db_engine)
-    grouping_query = dedent(
-        f'''
-        SELECT
-            {GROUPING_ID_KEY} AS grouping_id,
-            {GROUP_COLUMNS_KEY},
-            COUNT(*) AS num_rows
-        FROM sensor_readings
-        {GROUPING_SETS_KEY}
-        ''')
     query, set_index = grouping_sets_query(
-        db_engine, grouping_query, (
+        db_engine,
+        'SELECT * FROM sensor_readings',
+        (
             (Column('created_at'), Column('sensor_id')),
             (Column('created_at'),),
             (Column('sensor_id'),),
             (),
-        ))
+        ),
+        (Aggregate(AggregateFunction.COUNT, Column('*'), Column('num_rows')), )
+    )
     if db_engine.url.get_backend_name() == 'sqlite':
         assert('UNION ALL' in query)
         assert('GROUPING SETS' not in query)
@@ -37,5 +31,40 @@ def test_grouping_sets(db_engine: Engine):
         assert('GROUPING SETS' in query)
     result = db_engine.execute(query)
     all_rows = [dict(row) for row in result]
+
+    def dt(datetime_string):
+        return engine_based_datetime(db_engine, datetime_string)
     assert(all_rows == [
+        {'grouping_id': 0, 'created_at': dt('2021-05-05 11:00:00.000000'),
+         'sensor_id': '1', 'num_rows': 1},
+        {'grouping_id': 0, 'created_at': dt('2021-05-05 11:00:00.000000'),
+         'sensor_id': '2', 'num_rows': 1},
+        {'grouping_id': 0, 'created_at': dt('2021-05-05 11:00:00.000000'),
+         'sensor_id': '3', 'num_rows': 1},
+        {'grouping_id': 0, 'created_at': dt('2021-05-05 12:00:00.000000'),
+         'sensor_id': '1', 'num_rows': 1},
+        {'grouping_id': 0, 'created_at': dt('2021-05-05 12:00:00.000000'),
+         'sensor_id': '2', 'num_rows': 1},
+        {'grouping_id': 0, 'created_at': dt('2021-05-05 12:00:00.000000'),
+         'sensor_id': '3', 'num_rows': 1},
+        {'grouping_id': 0, 'created_at': dt('2021-05-05 13:00:00.000000'),
+         'sensor_id': '1', 'num_rows': 1},
+        {'grouping_id': 0, 'created_at': dt('2021-05-05 13:00:00.000000'),
+         'sensor_id': '2', 'num_rows': 1},
+        {'grouping_id': 0, 'created_at': dt('2021-05-05 13:00:00.000000'),
+         'sensor_id': '3', 'num_rows': 1},
+        {'grouping_id': 1, 'created_at': dt('2021-05-05 11:00:00.000000'),
+         'sensor_id': None, 'num_rows': 3},
+        {'grouping_id': 1, 'created_at': dt('2021-05-05 12:00:00.000000'),
+         'sensor_id': None, 'num_rows': 3},
+        {'grouping_id': 1, 'created_at': dt('2021-05-05 13:00:00.000000'),
+         'sensor_id': None, 'num_rows': 3},
+        {'grouping_id': 2, 'created_at': None,
+         'sensor_id': '1', 'num_rows': 3},
+        {'grouping_id': 2, 'created_at': None,
+         'sensor_id': '2', 'num_rows': 3},
+        {'grouping_id': 2, 'created_at': None,
+         'sensor_id': '3', 'num_rows': 3},
+        {'grouping_id': 3, 'created_at': None,
+         'sensor_id': None, 'num_rows': 9}
     ])
