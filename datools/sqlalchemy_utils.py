@@ -2,6 +2,7 @@ import sqlalchemy
 from tabulate import tabulate
 from textwrap import dedent
 from typing import Dict
+from typing import List
 from typing import Tuple
 
 from datools.models import Aggregate
@@ -55,28 +56,39 @@ def _native_grouping_sets_query(
     behavior seems to be shared with other databases):
     https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-GROUPING-TABLE
     """
-    column_indices: Dict[Column, int] = {}
-    for grouping_set in sets:
+    column_indices: Dict[str, int] = {}
+    set_strings: List[str] = []
+    set_indices: Dict[int, Tuple[Column, ...]] = {}
+    # A grouping ID with a binary representation of all 1s indicates
+    # no grouping set is used. Below, we will create grouping IDs by
+    # subtracting the 1 for the appropriate position for the grouping
+    # set being used.
+    no_sets_id = int('1' * len(sets), 2)
+    for set_index, grouping_set in enumerate(sets):
+        set_strings.append(', '.join(column.name for column in grouping_set))
+        # Subtract (2 ** set ID) from `no_sets_id` to flip its bit to 0.
+        set_indices[no_sets_id
+                    - (2 ** (len(sets) - set_index - 1))] = grouping_set
         for column in grouping_set:
-            index = column_indices.get(column)
+            index = column_indices.get(column.name)
             if index is None:
-                column_indices[column] = len(column_indices)
+                column_indices[column.name] = len(column_indices)
 
-    queries = []
-    set_index: Dict[int, Tuple[Column, ...]] = {}
-    for set_id, grouping_set in enumerate(sets):
-        set_index[set_id] = grouping_set
-        group_columns = [f'NULL AS {column.name}'
-                         for column in column_indices.keys()]
-        for column in grouping_set:
-            group_columns[column_indices[column]] = column.name
-        grouping_set_names = tuple(column.name for column in grouping_set)
-        queries.append(
-            query
-            .replace(grouping_id_key, str(set_id))
-            .replace(group_columns_key, ', '.join(group_columns))
-            .replace(grouping_sets_key, ', '.join(grouping_set_names)))
-    return '\nUNION ALL\n'.join(queries), set_index
+    sets_string = ', '.join(f'({group_string})'
+                            for group_string in set_strings)
+    group_columns = ', '.join(column_indices.keys())
+    aggregate_columns = ', '.join(agg.to_sql() for agg in aggregates)
+    return dedent(
+            f'''
+            WITH query AS ({query})
+            SELECT
+                GROUPING({group_columns}) AS {grouping_id_key},
+                {group_columns},
+                {aggregate_columns}
+            FROM query
+            GROUP BY GROUPING SETS ({sets_string})
+            '''
+    ), set_indices
 
 
 def _synthetic_grouping_sets_query(
