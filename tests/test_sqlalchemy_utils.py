@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+from operator import itemgetter
 from sqlalchemy.engine import Engine
 
 from datools.models import Aggregate
@@ -30,11 +31,13 @@ def test_grouping_sets(db_engine: Engine):
         assert('UNION ALL' not in query)
         assert('GROUPING SETS' in query)
     result = db_engine.execute(query)
+    sort_keys = ('grouping_id', 'created_at', 'sensor_id', 'num_rows')
     all_rows = [dict(row) for row in result]
+    all_rows.sort(key=itemgetter(*sort_keys))
 
     def dt(datetime_string):
         return engine_based_datetime(db_engine, datetime_string)
-    assert(all_rows == [
+    expected = [
         {'grouping_id': 0, 'created_at': dt('2021-05-05 11:00:00.000000'),
          'sensor_id': '1', 'num_rows': 1},
         {'grouping_id': 0, 'created_at': dt('2021-05-05 11:00:00.000000'),
@@ -67,4 +70,6 @@ def test_grouping_sets(db_engine: Engine):
          'sensor_id': '3', 'num_rows': 3},
         {'grouping_id': 3, 'created_at': None,
          'sensor_id': None, 'num_rows': 9}
-    ])
+    ]
+    expected.sort(key=itemgetter(*sort_keys))
+    assert(all_rows == expected)
