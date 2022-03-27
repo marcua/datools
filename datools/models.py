@@ -44,6 +44,14 @@ class Constant:
 class Aggregate:
     function: AggregateFunction
     column: Column
+    as_name: Column
+
+    def to_sql(self):
+        return (f'{self.function.name}({self.column.name}) '
+                f'AS {self.as_name.name}')
+
+    def __repr__(self):
+        return f'Aggregate({self.to_sql()})'
 
 
 @dataclass

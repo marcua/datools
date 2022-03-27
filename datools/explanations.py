@@ -10,14 +10,13 @@ from typing import Set
 from typing import Tuple
 
 from datools.errors import DatoolsError
+from datools.models import Aggregate
+from datools.models import AggregateFunction
 from datools.models import Column
 from datools.models import Constant
 from datools.models import Explanation
 from datools.models import Operator
 from datools.models import Predicate
-from datools.sqlalchemy_utils import GROUP_COLUMNS_KEY
-from datools.sqlalchemy_utils import GROUPING_ID_KEY
-from datools.sqlalchemy_utils import GROUPING_SETS_KEY
 from datools.sqlalchemy_utils import INDENT
 from datools.sqlalchemy_utils import grouping_sets_query
 from datools.sqlalchemy_utils import query_columns
@@ -93,29 +92,19 @@ def _explanation_counts_query(
         on_columns: Set[Column],
         min_support_rows: int = None
 ) -> Tuple[str, Dict[int, Tuple[Column, ...]]]:
-    explanation_query = dedent(
-        f'''
-        SELECT
-            {GROUPING_ID_KEY} AS grouping_id,
-            {GROUP_COLUMNS_KEY},
-            1.0 * COUNT(*) AS explanation_size
-        FROM query
-        GROUP BY {GROUPING_SETS_KEY}
-        ''')
-    if min_support_rows is not None:
-        explanation_query += f'HAVING explanation_size > {min_support_rows}\n'
-
     group_explanations_query, grouping_set_index = grouping_sets_query(
         engine,
-        explanation_query,
-        tuple((column, ) for column in on_columns))
-    return dedent(
-        f'''
-        WITH query AS (
-            {relation}
-        )
-        {group_explanations_query}
-        '''), grouping_set_index
+        relation,
+        tuple((column, ) for column in on_columns),
+        (Aggregate(
+            AggregateFunction.COUNT,
+            Column('*'),
+            Column('explanation_size')), )
+    )
+    if min_support_rows is not None:
+        group_explanations_query += (
+            f'HAVING (1.0 * COUNT(*)) > {min_support_rows}\n')
+    return group_explanations_query, grouping_set_index
 
 
 def _diff_query(
@@ -149,22 +138,27 @@ def _diff_query(
         ),
         control AS (
             {indent(control_explanations_query, 3 * INDENT)}
+        ),
+        comparison AS (
+            SELECT
+                test.grouping_id,
+                {', '.join(f'test.{column.name}' for column in on_columns)},
+                test.explanation_size AS test_explanation_size,
+                control.explanation_size AS control_explanation_size,
+                (1.0 * test.explanation_size
+                 / (test.explanation_size
+                   + COALESCE(control.explanation_size, 0)))
+                /
+                (1.0 * ({adjusted_test_rows} - test.explanation_size)
+                 / (({adjusted_test_rows} - test.explanation_size)
+                    + ({adjusted_control_rows}
+                       - COALESCE(control.explanation_size, 0)))
+                ) AS risk_ratio
+            FROM test
+            LEFT JOIN control ON {join_statement}
         )
-        SELECT
-            test.grouping_id,
-            {', '.join(f'test.{column.name}' for column in on_columns)},
-            test.explanation_size AS test_explanation_size,
-            control.explanation_size AS control_explanation_size,
-            (test.explanation_size / (test.explanation_size
-                                      + COALESCE(control.explanation_size, 0)))
-            /
-            (({adjusted_test_rows} - test.explanation_size)
-             / (({adjusted_test_rows} - test.explanation_size)
-                + ({adjusted_control_rows}
-                   - COALESCE(control.explanation_size, 0)))
-            ) AS risk_ratio
-        FROM test
-        LEFT JOIN control ON {join_statement}
+        SELECT *
+        FROM comparison
         WHERE risk_ratio > {min_risk_ratio}
         ORDER BY risk_ratio DESC
         ''')
@@ -285,6 +279,9 @@ def diff(
                 # Turn the proxy range bucket column back into a predicate on
                 # the range-valued column.
                 predicates += test_bucket_predicates[column][row[column.name]]
-        explanations.append(Explanation(tuple(predicates), row.risk_ratio))
+        # Some databases (e.g., PostgreSQL) cast `risk_ratio` as
+        # Decimal, so we cast to float.
+        explanations.append(
+            Explanation(tuple(predicates), float(row.risk_ratio)))
     result.close()
     return explanations
