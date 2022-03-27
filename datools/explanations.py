@@ -138,22 +138,26 @@ def _diff_query(
         ),
         control AS (
             {indent(control_explanations_query, 3 * INDENT)}
+        ),
+        comparison AS (
+            SELECT
+                test.grouping_id,
+                {', '.join(f'test.{column.name}' for column in on_columns)},
+                test.explanation_size AS test_explanation_size,
+                control.explanation_size AS control_explanation_size,
+                (1.0 * test.explanation_size / (test.explanation_size
+                                          + COALESCE(control.explanation_size, 0)))
+                /
+                (1.0 * ({adjusted_test_rows} - test.explanation_size)
+                 / (({adjusted_test_rows} - test.explanation_size)
+                    + ({adjusted_control_rows}
+                       - COALESCE(control.explanation_size, 0)))
+                ) AS risk_ratio
+            FROM test
+            LEFT JOIN control ON {join_statement}
         )
-        SELECT
-            test.grouping_id,
-            {', '.join(f'test.{column.name}' for column in on_columns)},
-            test.explanation_size AS test_explanation_size,
-            control.explanation_size AS control_explanation_size,
-            (1.0 * test.explanation_size / (test.explanation_size
-                                      + COALESCE(control.explanation_size, 0)))
-            /
-            (1.0 * ({adjusted_test_rows} - test.explanation_size)
-             / (({adjusted_test_rows} - test.explanation_size)
-                + ({adjusted_control_rows}
-                   - COALESCE(control.explanation_size, 0)))
-            ) AS risk_ratio
-        FROM test
-        LEFT JOIN control ON {join_statement}
+        SELECT *
+        FROM comparison
         WHERE risk_ratio > {min_risk_ratio}
         ORDER BY risk_ratio DESC
         ''')
@@ -274,6 +278,8 @@ def diff(
                 # Turn the proxy range bucket column back into a predicate on
                 # the range-valued column.
                 predicates += test_bucket_predicates[column][row[column.name]]
-        explanations.append(Explanation(tuple(predicates), row.risk_ratio))
+        # Some databases (e.g., PostgreSQL) cast `risk_ratio` as
+        # Decimal, so we cast to float.
+        explanations.append(Explanation(tuple(predicates), float(row.risk_ratio)))
     result.close()
     return explanations
