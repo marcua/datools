@@ -145,8 +145,9 @@ def _diff_query(
                 {', '.join(f'test.{column.name}' for column in on_columns)},
                 test.explanation_size AS test_explanation_size,
                 control.explanation_size AS control_explanation_size,
-                (1.0 * test.explanation_size / (test.explanation_size
-                                          + COALESCE(control.explanation_size, 0)))
+                (1.0 * test.explanation_size
+                 / (test.explanation_size
+                   + COALESCE(control.explanation_size, 0)))
                 /
                 (1.0 * ({adjusted_test_rows} - test.explanation_size)
                  / (({adjusted_test_rows} - test.explanation_size)
@@ -280,6 +281,7 @@ def diff(
                 predicates += test_bucket_predicates[column][row[column.name]]
         # Some databases (e.g., PostgreSQL) cast `risk_ratio` as
         # Decimal, so we cast to float.
-        explanations.append(Explanation(tuple(predicates), float(row.risk_ratio)))
+        explanations.append(
+            Explanation(tuple(predicates), float(row.risk_ratio)))
     result.close()
     return explanations
