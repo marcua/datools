@@ -10,12 +10,12 @@ We'll add more examples, but the best places to look for now are:
 [Grouping
 sets](https://www.geeksforgeeks.org/postgresql-grouping-sets/) are a
 neat feature of some databases that allow you to GROUP BY multiple
-combinations of columns in a single pass over your
-data. Unfortunately, some databases, like PostgreSQL and DuckDB,
-support them natively, whereas others like SQLite
-don't. `datools.sqlalchemy.grouping_sets_query` will generate a
-GROUPING SETs query if your database allows it or create a synthetic
-equivalent using a UNION ALL of several GROUP BY queries.
+combinations of columns in a single pass over your data. Some
+databases, like PostgreSQL and DuckDB, support them natively, whereas
+others, like SQLite, don't. `datools.sqlalchemy.grouping_sets_query`
+will generate a GROUPING SETs query if your database allows it or
+create a synthetic equivalent using a UNION ALL of several GROUP BY
+queries.
 
 This is concept best explained by example, and we'll use the [test
 suite](https://github.com/marcua/datools/blob/14752f0e841a89a9c991bc9893e58d3b708cac7d/tests/test_sqlalchemy_utils.py#L15)
