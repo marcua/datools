@@ -18,5 +18,5 @@ following databases:
 | ----------- | ----------- |
 | SQLite      | Since v0.1.2 |
 | DuckDB   | Since v0.1.4 |
-| PostgreSQL   | *Planned for next release* |
+| PostgreSQL   | Since v0.1.5 |
 | Redshift, Snowflake   | *You provide an instance, I'll make the tests pass* |
