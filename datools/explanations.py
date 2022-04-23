@@ -6,6 +6,7 @@ from textwrap import dedent
 from textwrap import indent
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Set
 from typing import Tuple
 
@@ -90,8 +91,13 @@ def _explanation_counts_query(
         engine: sqlalchemy.engine.Engine,
         relation: str,
         on_columns: Set[Column],
+        explanation_columns: Optional[Set[Tuple[Column, ...]]],
         min_support_rows: int = None
 ) -> Tuple[str, Dict[int, Tuple[Column, ...]]]:
+    # TODO(marcua): cross-product on_columns and explanation_columns
+    # (if it's non-None) to create the candidate set. (Consider moving
+    # this logic to its own function so explanation_counts_query is
+    # just responsible for counting.)
     group_explanations_query, grouping_set_index = grouping_sets_query(
         engine,
         relation,
@@ -112,9 +118,11 @@ def _diff_query(
         control_explanations_query: str,
         num_test_rows: float,
         num_control_rows: float,
-        on_columns: Set[Column],
+        on_column_groups: Set[Tuple[Column]],
         min_risk_ratio: float
 ) -> str:
+    # TODO(marcua): handle groups of columns rather than individual
+    # on_columns.
     join_conditions = (
         ['test.grouping_id = control.grouping_id']
         + [f'((test.{column.name} = control.{column.name}) '
@@ -217,12 +225,7 @@ def diff(
     :param max_order: The largest number of columns on which to consider
                       an explanation. For example, a 2-column explanation could
                       be that (category='dog walker' AND signup_day='sunday').
-                      The current implementation only supports 1-column
-                      explanations.
     """
-    if max_order != 1:
-        raise DatoolsError('Only one-column predicates are supported for now')
-
     # Get all column names from test_relation and control_relation,
     # ensure they are the same.
     # TODO(marcua): compare types.
@@ -256,6 +259,8 @@ def diff(
 
     # GROUP BY all test_relation columns, remove ones with a size less
     # than min_support_rows.
+    # TODO(marcua): Iterate on
+    # on_columns/explanation_columns max_order - 1 times.
     on_columns = (on_column_values |
                   {column for column in test_bucket_predicates.keys()})
     test_explanations_query, grouping_set_index = _explanation_counts_query(
