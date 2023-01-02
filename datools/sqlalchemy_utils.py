@@ -22,7 +22,7 @@ def query_columns(
 
 
 def query_results_pretty_print(
-        engine: sqlalchemy.engine.Engine, query: str, 
+        engine: sqlalchemy.engine.Engine, query: str,
         label: Optional[str] = None
 ) -> None:
     if label:
