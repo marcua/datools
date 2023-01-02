@@ -6,6 +6,7 @@ from textwrap import dedent
 from textwrap import indent
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Set
 from typing import Tuple
 
@@ -90,7 +91,7 @@ def _explanation_counts_query(
         engine: sqlalchemy.engine.Engine,
         relation: str,
         on_columns: Set[Column],
-        min_support_rows: int = None
+        min_support_rows: Optional[int] = None
 ) -> Tuple[str, Dict[int, Tuple[Column, ...]]]:
     group_explanations_query, grouping_set_index = grouping_sets_query(
         engine,

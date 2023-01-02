@@ -3,6 +3,7 @@ from tabulate import tabulate
 from textwrap import dedent
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Tuple
 
 from datools.models import Aggregate
@@ -21,7 +22,8 @@ def query_columns(
 
 
 def query_results_pretty_print(
-        engine: sqlalchemy.engine.Engine, query: str, label: str = None
+        engine: sqlalchemy.engine.Engine, query: str,
+        label: Optional[str] = None
 ) -> None:
     if label:
         print(f'*** {label} ***')
