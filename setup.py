@@ -14,7 +14,7 @@ requirements = [
     'Click>=7.0',
     'dataclasses; python_version<"3.7"',
     'sqlalchemy==1.4.17',
-    'tabulate==0.8.9',
+    'tabulate==0.9.0',
 ]
 
 setup_requirements = ['pytest-runner', ]
