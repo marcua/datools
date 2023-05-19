@@ -13,7 +13,7 @@ with open('HISTORY.md') as history_file:
 requirements = [
     'Click>=7.0',
     'dataclasses; python_version<"3.7"',
-    'sqlalchemy==1.4.17',
+    'sqlalchemy==2.0.14',
     'tabulate==0.9.0',
 ]
 
